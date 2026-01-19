@@ -1,0 +1,134 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/deploy-infra.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Bicep
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        uses: azure/setup-bicep@v2
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Bicep
+        run: |
+          az deployment sub validate \
+            --location eastus \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/dev.bicepparam
+
+  deploy-dev:
+    name: Deploy to Dev
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: dev
+    if: github.event_name == 'push' || github.event.inputs.environment == 'dev'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Infrastructure
+        id: deploy
+        run: |
+          result=$(az deployment sub create \
+            --location eastus \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/dev.bicepparam \
+            --query "properties.outputs" \
+            --output json)
+
+          echo "FUNCTION_APP_NAME=$(echo $result | jq -r '.functionAppName.value')" >> $GITHUB_OUTPUT
+          echo "WEBHOOK_URL=$(echo $result | jq -r '.webhookUrl.value')" >> $GITHUB_OUTPUT
+          echo "KEY_VAULT_NAME=$(echo $result | jq -r '.keyVaultName.value')" >> $GITHUB_OUTPUT
+
+      - name: Output deployment info
+        run: |
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Function App | ${{ steps.deploy.outputs.FUNCTION_APP_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Webhook URL | ${{ steps.deploy.outputs.WEBHOOK_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Key Vault | ${{ steps.deploy.outputs.KEY_VAULT_NAME }} |" >> $GITHUB_STEP_SUMMARY
+
+  deploy-prod:
+    name: Deploy to Prod
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: prod
+    if: github.event.inputs.environment == 'prod'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Infrastructure
+        id: deploy
+        run: |
+          result=$(az deployment sub create \
+            --location eastus \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/prod.bicepparam \
+            --query "properties.outputs" \
+            --output json)
+
+          echo "FUNCTION_APP_NAME=$(echo $result | jq -r '.functionAppName.value')" >> $GITHUB_OUTPUT
+          echo "WEBHOOK_URL=$(echo $result | jq -r '.webhookUrl.value')" >> $GITHUB_OUTPUT
+
+      - name: Output deployment info
+        run: |
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Function App | ${{ steps.deploy.outputs.FUNCTION_APP_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Webhook URL | ${{ steps.deploy.outputs.WEBHOOK_URL }} |" >> $GITHUB_STEP_SUMMARY

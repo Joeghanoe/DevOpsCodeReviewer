@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - '.github/workflows/ci.yml'
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/DevOpsCodeReviewer.Functions/DevOpsCodeReviewer.Functions.csproj
+
+      - name: Build
+        run: dotnet build src/DevOpsCodeReviewer.Functions/DevOpsCodeReviewer.Functions.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: |
+          if [ -d "tests/DevOpsCodeReviewer.Tests" ]; then
+            dotnet test tests/DevOpsCodeReviewer.Tests/DevOpsCodeReviewer.Tests.csproj --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+          else
+            echo "No tests found, skipping..."
+          fi
+
+      - name: Upload coverage reports
+        if: success() && hashFiles('coverage/**/*.xml') != ''
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/**/coverage.cobertura.xml
+          fail_ci_if_error: false
+
+  lint-bicep:
+    name: Lint Bicep
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        uses: azure/setup-bicep@v2
+
+      - name: Lint Bicep files
+        run: |
+          for file in $(find infra -name "*.bicep"); do
+            echo "Linting $file..."
+            az bicep lint --file "$file"
+          done
+
+      - name: Build Bicep (validate)
+        run: az bicep build --file infra/main.bicep --stdout > /dev/null
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/DevOpsCodeReviewer.Functions/DevOpsCodeReviewer.Functions.csproj
+
+      - name: Run security scan
+        run: |
+          dotnet list src/DevOpsCodeReviewer.Functions/DevOpsCodeReviewer.Functions.csproj package --vulnerable --include-transitive 2>&1 | tee security-report.txt
+          if grep -q "has the following vulnerable packages" security-report.txt; then
+            echo "::warning::Vulnerable packages detected"
+          fi
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.txt
