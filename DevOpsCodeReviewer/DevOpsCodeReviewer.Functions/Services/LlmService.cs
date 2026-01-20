@@ -209,7 +209,10 @@ public class LlmService : ILlmService
         sb.AppendLine($"**Target Branch**: {request.TargetBranch}");
         sb.AppendLine($"**Author**: {request.AuthorName}");
         sb.AppendLine();
-        sb.AppendLine("## Changed Files");
+        sb.AppendLine("## Changed Files (Diff Format)");
+        sb.AppendLine();
+        sb.AppendLine("Below are the changes in unified diff format. Lines starting with `+` are additions, `-` are deletions, and unmarked lines are context.");
+        sb.AppendLine("The line numbers shown (e.g., `L42`) refer to the NEW file after changes. Use these exact line numbers in your comments.");
         sb.AppendLine();
 
         foreach (var file in files)
@@ -217,15 +220,56 @@ public class LlmService : ILlmService
             var language = _codeAnalysisService.GetLanguageFromPath(file.Path);
             sb.AppendLine($"### {file.Path} ({file.ChangeType})");
             sb.AppendLine();
-            sb.AppendLine($"```{language}");
-            sb.AppendLine(AddLineNumbers(file.Content));
-            sb.AppendLine("```");
+
+            if (file.DiffHunks.Count > 0)
+            {
+                sb.AppendLine($"```{language}");
+                sb.AppendLine(FormatDiffHunks(file.DiffHunks));
+                sb.AppendLine("```");
+            }
+            else
+            {
+                // Fallback to full file with line numbers if no diff available
+                sb.AppendLine($"```{language}");
+                sb.AppendLine(AddLineNumbers(file.Content));
+                sb.AppendLine("```");
+            }
             sb.AppendLine();
         }
 
-        sb.AppendLine("Please review the above code changes and provide feedback.");
+        sb.AppendLine("Review the changes shown above. Focus ONLY on the added (+) and modified lines.");
+        sb.AppendLine("Use the exact line numbers (L###) shown in the diff for your comments.");
 
         return sb.ToString();
+    }
+
+    private static string FormatDiffHunks(List<DiffHunk> hunks)
+    {
+        var sb = new StringBuilder();
+
+        foreach (var hunk in hunks)
+        {
+            // Add hunk header similar to unified diff
+            sb.AppendLine($"@@ -{hunk.OldStartLine},{hunk.OldLineCount} +{hunk.NewStartLine},{hunk.NewLineCount} @@");
+
+            foreach (var line in hunk.Lines)
+            {
+                var prefix = line.Type switch
+                {
+                    DiffLineType.Added => "+",
+                    DiffLineType.Deleted => "-",
+                    _ => " "
+                };
+
+                // Show line number for new file (what will exist after merge)
+                var lineNum = line.NewLineNumber.HasValue ? $"L{line.NewLineNumber.Value,3}" : "    ";
+                sb.AppendLine($"{lineNum} {prefix} {line.Content}");
+            }
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     private static string AddLineNumbers(string content)
@@ -235,7 +279,7 @@ public class LlmService : ILlmService
 
         for (var i = 0; i < lines.Length; i++)
         {
-            sb.AppendLine($"{i + 1,4}: {lines[i].TrimEnd('\r')}");
+            sb.AppendLine($"L{i + 1,3}   {lines[i].TrimEnd('\r')}");
         }
 
         return sb.ToString().TrimEnd();

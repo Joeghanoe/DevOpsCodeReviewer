@@ -24,13 +24,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DevOpsCodeReviewer.Functions\DevOpsCodeReviewer.Functions.csproj" />
+    <ProjectReference Include="..\DevOpsCodeReviewer.Functions\DevOpsCodeReviewer.Functions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="Moq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude fixture files from compilation - they are test data, not source code -->
+    <Compile Remove="Fixtures\**\*" />
+    <Content Include="Fixtures\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

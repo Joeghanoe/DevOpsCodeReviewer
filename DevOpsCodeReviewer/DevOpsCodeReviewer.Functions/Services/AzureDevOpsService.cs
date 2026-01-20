@@ -17,6 +17,7 @@ public class AzureDevOpsService : IAzureDevOpsService
     private readonly HttpClient _httpClient;
     private readonly AzureDevOpsOptions _options;
     private readonly SecretClient? _secretClient;
+    private readonly IDiffService _diffService;
     private readonly ILogger<AzureDevOpsService> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
     private string? _cachedPat;
@@ -24,11 +25,13 @@ public class AzureDevOpsService : IAzureDevOpsService
     public AzureDevOpsService(
         HttpClient httpClient,
         IOptions<AzureDevOpsOptions> options,
+        IDiffService diffService,
         ILogger<AzureDevOpsService> logger,
         SecretClient? secretClient = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _diffService = diffService;
         _secretClient = secretClient;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
@@ -162,14 +165,15 @@ public class AzureDevOpsService : IAzureDevOpsService
         CancellationToken cancellationToken = default)
     {
         var encodedPath = Uri.EscapeDataString(path);
-        var url = $"{organizationUrl.TrimEnd('/')}/{projectId}/_apis/git/repositories/{repositoryId}/items?path={encodedPath}&api-version={_options.ApiVersion}";
+        // IMPORTANT: $format=text is required to get the actual file content, not JSON metadata
+        var url = $"{organizationUrl.TrimEnd('/')}/{projectId}/_apis/git/repositories/{repositoryId}/items?path={encodedPath}&$format=text&api-version={_options.ApiVersion}";
 
         if (!string.IsNullOrEmpty(commitId))
         {
             url += $"&versionDescriptor.version={commitId}&versionDescriptor.versionType=commit";
         }
 
-        _logger.LogDebug("Getting file content: {Path}", path);
+        _logger.LogDebug("Getting file content: {Path} at commit {CommitId}", path, commitId ?? "latest");
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
         var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -180,7 +184,10 @@ public class AzureDevOpsService : IAzureDevOpsService
             return null;
         }
 
-        return await response.Content.ReadAsStringAsync(cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        _logger.LogDebug("Retrieved {Length} characters for {Path}", content.Length, path);
+
+        return content;
     }
 
     public async Task<List<CommentThread>> GetPullRequestThreadsAsync(
@@ -251,6 +258,11 @@ public class AzureDevOpsService : IAzureDevOpsService
         var changes = await GetIterationChangesAsync(
             organizationUrl, projectId, repositoryId, pullRequestId, iterationId, cancellationToken);
 
+        // Get PR details to find target branch commit
+        var prDetails = await GetPullRequestAsync(
+            organizationUrl, projectId, repositoryId, pullRequestId, cancellationToken);
+        var targetCommitId = prDetails?.LastMergeTargetCommit?.CommitId;
+
         var fileContents = new List<FileContent>();
 
         foreach (var change in changes)
@@ -268,6 +280,7 @@ public class AzureDevOpsService : IAzureDevOpsService
                 continue;
             }
 
+            // Get new file content
             var content = await GetFileContentAsync(
                 organizationUrl, projectId, repositoryId, path, sourceCommitId, cancellationToken);
 
@@ -281,14 +294,28 @@ public class AzureDevOpsService : IAzureDevOpsService
                 continue;
             }
 
+            // Get original file content for edits (not for new files)
+            string? originalContent = null;
+            if (!change.ChangeType.Equals("add", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(targetCommitId))
+            {
+                originalContent = await GetFileContentAsync(
+                    organizationUrl, projectId, repositoryId, path, targetCommitId, cancellationToken);
+            }
+
+            // Compute diff
+            var diffHunks = _diffService.ComputeDiff(originalContent, content);
+
             fileContents.Add(new FileContent
             {
                 Path = path,
                 Content = content,
+                OriginalContent = originalContent,
                 ChangeType = change.ChangeType,
                 LineCount = content.Split('\n').Length,
                 ObjectId = change.Item.ObjectId,
-                OriginalObjectId = change.Item.OriginalObjectId
+                OriginalObjectId = change.Item.OriginalObjectId,
+                DiffHunks = diffHunks
             });
 
             // Limit number of files

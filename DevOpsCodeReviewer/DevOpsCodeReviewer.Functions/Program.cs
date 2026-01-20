@@ -40,6 +40,9 @@ var host = new HostBuilder()
             });
         }
 
+        // Register diff service (needed by AzureDevOpsService)
+        services.AddSingleton<IDiffService, DiffService>();
+
         // Configure HttpClient with retry policy for Azure DevOps
         services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>(client =>
         {

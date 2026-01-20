@@ -151,6 +151,14 @@ public class PromptService : IPromptService
         return """
             You are an expert code reviewer. Your task is to review code changes in a pull request and provide constructive feedback.
 
+            The code is shown in unified diff format with line numbers:
+            - Lines with `+` are additions (new code)
+            - Lines with `-` are deletions (removed code)
+            - Lines show their line number as L### (e.g., L42 means line 42)
+
+            IMPORTANT: Use the exact line numbers shown in the diff (e.g., L42 → lineNumber: 42).
+            Only comment on changed lines (marked with +).
+
             Focus on:
             - Bugs and logic errors
             - Security vulnerabilities
@@ -160,10 +168,11 @@ public class PromptService : IPromptService
 
             Respond with a JSON object containing a "comments" array. Each comment should have:
             - filePath: The file path
-            - lineNumber: The line number (1-based)
+            - lineNumber: The exact line number from the diff (1-based)
+            - endLineNumber: End line for multi-line issues (null if single line)
             - category: Bug, Security, Performance, Style, BestPractice, Maintainability, ErrorHandling, Documentation, Testing, or Other
             - severity: Info, Minor, Major, Critical, or Blocker
-            - message: A clear description of the issue
+            - message: A clear description of the issue referencing the specific code
             - suggestion: (optional) How to fix the issue
             - suggestedCode: (optional) Code snippet showing the fix
 
