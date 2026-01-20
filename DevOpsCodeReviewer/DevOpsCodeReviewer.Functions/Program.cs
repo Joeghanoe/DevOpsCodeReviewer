@@ -27,6 +27,7 @@ var host = new HostBuilder()
         services.Configure<LlmOptions>(configuration.GetSection("Llm"));
         services.Configure<ServiceBusOptions>(configuration.GetSection("ServiceBus"));
         services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));
+        services.Configure<ReviewOutputOptions>(configuration.GetSection("ReviewOutput"));
 
         // Register Key Vault client
         var keyVaultUrl = configuration["KeyVault:VaultUrl"];
@@ -49,7 +50,15 @@ var host = new HostBuilder()
 
         // Register services
         services.AddSingleton<ICodeAnalysisService, CodeAnalysisService>();
+        services.AddSingleton<IPromptService, PromptService>();
         services.AddSingleton<ILlmService, LlmService>();
+
+        // Register review output service based on build configuration
+#if DEBUG
+        services.AddSingleton<IReviewOutputService, LocalFileOutputService>();
+#else
+        services.AddSingleton<IReviewOutputService, AzureDevOpsOutputService>();
+#endif
 
         // Application Insights
         services.AddApplicationInsightsTelemetryWorkerService();

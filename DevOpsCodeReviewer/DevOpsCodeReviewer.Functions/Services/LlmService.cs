@@ -20,6 +20,7 @@ public class LlmService : ILlmService
     private readonly LlmOptions _options;
     private readonly SecretClient? _secretClient;
     private readonly ICodeAnalysisService _codeAnalysisService;
+    private readonly IPromptService _promptService;
     private readonly ILogger<LlmService> _logger;
     private ChatClient? _chatClient;
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -27,12 +28,14 @@ public class LlmService : ILlmService
     public LlmService(
         IOptions<LlmOptions> options,
         ICodeAnalysisService codeAnalysisService,
+        IPromptService promptService,
         ILogger<LlmService> logger,
         SecretClient? secretClient = null)
     {
         _options = options.Value;
         _secretClient = secretClient;
         _codeAnalysisService = codeAnalysisService;
+        _promptService = promptService;
         _logger = logger;
     }
 
@@ -84,7 +87,7 @@ public class LlmService : ILlmService
     {
         var chatClient = await GetChatClientAsync(cancellationToken);
 
-        var systemPrompt = BuildSystemPrompt();
+        var systemPrompt = _promptService.GetSystemPrompt(files.Select(f => f.Path));
         var userPrompt = BuildUserPrompt(request, files);
 
         _logger.LogInformation("Reviewing {FileCount} files for PR #{PullRequestId}",
@@ -189,59 +192,6 @@ public class LlmService : ILlmService
                 delay *= 2; // Exponential backoff
             }
         }
-    }
-
-    private string BuildSystemPrompt()
-    {
-        return """
-            You are an expert code reviewer. Your task is to review code changes in a pull request and provide constructive feedback.
-
-            ## Review Guidelines
-
-            1. **Focus on Important Issues**: Prioritize bugs, security vulnerabilities, and performance problems over style issues.
-
-            2. **Be Constructive**: Provide actionable suggestions, not just criticism.
-
-            3. **Be Specific**: Reference exact line numbers and explain why something is an issue.
-
-            4. **Consider Context**: The code is part of a larger system. Don't suggest changes that might break other parts.
-
-            5. **Avoid Nitpicking**: Don't comment on minor style preferences unless they significantly impact readability.
-
-            ## Severity Levels
-
-            - **Info (1)**: Informational, nice to know
-            - **Minor (2)**: Should be fixed but not blocking
-            - **Major (3)**: Should be addressed before merge
-            - **Critical (4)**: Must be fixed before merge
-            - **Blocker (5)**: Cannot be merged with this issue
-
-            ## Categories
-
-            - Bug: Potential bugs or errors
-            - Security: Security vulnerabilities
-            - Performance: Performance issues
-            - Style: Code style and formatting
-            - BestPractice: Best practices and patterns
-            - Maintainability: Code maintainability
-            - ErrorHandling: Error handling issues
-            - Documentation: Documentation and comments
-            - Testing: Testing concerns
-            - Other: Other suggestions
-
-            ## Response Format
-
-            Respond with a JSON object containing an array of comments. Each comment should have:
-            - filePath: The file path
-            - lineNumber: The line number (1-based)
-            - category: One of the categories above
-            - severity: One of Info, Minor, Major, Critical, Blocker
-            - message: A clear description of the issue
-            - suggestion: (optional) How to fix the issue
-            - suggestedCode: (optional) Code snippet showing the fix
-
-            If there are no issues to report, return an empty comments array.
-            """;
     }
 
     private string BuildUserPrompt(CodeReviewRequest request, List<FileContent> files)

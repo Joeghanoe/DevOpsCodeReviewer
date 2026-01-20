@@ -17,6 +17,7 @@ public class CodeReviewProcessor
     private readonly IAzureDevOpsService _adoService;
     private readonly ICodeAnalysisService _codeAnalysisService;
     private readonly ILlmService _llmService;
+    private readonly IReviewOutputService _reviewOutputService;
     private readonly AzureDevOpsOptions _adoOptions;
     private readonly LlmOptions _llmOptions;
     private readonly ILogger<CodeReviewProcessor> _logger;
@@ -25,6 +26,7 @@ public class CodeReviewProcessor
         IAzureDevOpsService adoService,
         ICodeAnalysisService codeAnalysisService,
         ILlmService llmService,
+        IReviewOutputService reviewOutputService,
         IOptions<AzureDevOpsOptions> adoOptions,
         IOptions<LlmOptions> llmOptions,
         ILogger<CodeReviewProcessor> logger)
@@ -32,6 +34,7 @@ public class CodeReviewProcessor
         _adoService = adoService;
         _codeAnalysisService = codeAnalysisService;
         _llmService = llmService;
+        _reviewOutputService = reviewOutputService;
         _adoOptions = adoOptions.Value;
         _llmOptions = llmOptions.Value;
         _logger = logger;
@@ -180,57 +183,31 @@ public class CodeReviewProcessor
         var postedCount = 0;
         foreach (var comment in uniqueComments)
         {
-            var thread = await PostCommentAsync(request, comment, cancellationToken);
-            if (thread != null)
+            var success = await PostCommentAsync(request, comment, cancellationToken);
+            if (success)
             {
                 postedCount++;
             }
         }
 
+        // Finalize the review output (writes to file in Debug, no-op in Release)
+        await _reviewOutputService.FinalizeReviewAsync(request, postedCount, cancellationToken);
+
         _logger.LogInformation("Posted {PostedCount} comments to PR #{PullRequestId}",
             postedCount, request.PullRequestId);
     }
 
-    private async Task<CommentThread?> PostCommentAsync(
+    private async Task<bool> PostCommentAsync(
         CodeReviewRequest request,
         ReviewComment comment,
         CancellationToken cancellationToken)
     {
         var content = FormatCommentContent(comment);
 
-        var threadRequest = new CreateThreadRequest
-        {
-            Comments =
-            [
-                new CreateComment
-                {
-                    Content = content,
-                    CommentType = "text"
-                }
-            ],
-            Status = "active",
-            ThreadContext = new ThreadContext
-            {
-                FilePath = comment.FilePath,
-                RightFileStart = new LinePosition
-                {
-                    Line = comment.LineNumber,
-                    Offset = 1
-                },
-                RightFileEnd = new LinePosition
-                {
-                    Line = comment.EndLineNumber ?? comment.LineNumber,
-                    Offset = 1
-                }
-            }
-        };
-
-        return await _adoService.CreateCommentThreadAsync(
-            request.OrganizationUrl,
-            request.ProjectId,
-            request.RepositoryId,
-            request.PullRequestId,
-            threadRequest,
+        return await _reviewOutputService.PublishCommentAsync(
+            request,
+            comment,
+            content,
             cancellationToken);
     }
 
