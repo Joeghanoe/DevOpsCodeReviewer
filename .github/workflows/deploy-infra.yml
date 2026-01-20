@@ -47,7 +47,7 @@ jobs:
       - name: Validate Bicep
         run: |
           az deployment sub validate \
-            --location eastus \
+            --location westeurope \
             --template-file infra/main.bicep \
             --parameters infra/parameters/dev.bicepparam
 
@@ -73,7 +73,7 @@ jobs:
         id: deploy
         run: |
           result=$(az deployment sub create \
-            --location eastus \
+            --location westeurope \
             --template-file infra/main.bicep \
             --parameters infra/parameters/dev.bicepparam \
             --query "properties.outputs" \
@@ -115,7 +115,7 @@ jobs:
         id: deploy
         run: |
           result=$(az deployment sub create \
-            --location eastus \
+            --location westeurope \
             --template-file infra/main.bicep \
             --parameters infra/parameters/prod.bicepparam \
             --query "properties.outputs" \

@@ -317,7 +317,7 @@ public class LlmService : ILlmService
                       "suggestion": { "type": ["string", "null"] },
                       "suggestedCode": { "type": ["string", "null"] }
                     },
-                    "required": ["filePath", "lineNumber", "category", "severity", "message"],
+                    "required": ["filePath", "lineNumber", "endLineNumber", "category", "severity", "message", "suggestion", "suggestedCode"],
                     "additionalProperties": false
                   }
                 }

@@ -26,6 +26,7 @@ var host = new HostBuilder()
         services.Configure<AzureDevOpsOptions>(configuration.GetSection("AzureDevOps"));
         services.Configure<LlmOptions>(configuration.GetSection("Llm"));
         services.Configure<ServiceBusOptions>(configuration.GetSection("ServiceBus"));
+        services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));
 
         // Register Key Vault client
         var keyVaultUrl = configuration["KeyVault:VaultUrl"];

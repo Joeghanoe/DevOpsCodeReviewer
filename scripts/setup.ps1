@@ -25,7 +25,7 @@ param(
     [string]$Environment = 'dev',
 
     [Parameter()]
-    [string]$Location = 'eastus',
+    [string]$Location = 'westeurope',
 
     [Parameter()]
     [switch]$SkipInfrastructure,

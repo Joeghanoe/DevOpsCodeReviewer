@@ -245,6 +245,7 @@ public class AzureDevOpsService : IAzureDevOpsService
         string repositoryId,
         int pullRequestId,
         int iterationId,
+        string? sourceCommitId,
         CancellationToken cancellationToken = default)
     {
         var changes = await GetIterationChangesAsync(
@@ -268,7 +269,7 @@ public class AzureDevOpsService : IAzureDevOpsService
             }
 
             var content = await GetFileContentAsync(
-                organizationUrl, projectId, repositoryId, path, change.Item.ObjectId, cancellationToken);
+                organizationUrl, projectId, repositoryId, path, sourceCommitId, cancellationToken);
 
             if (content == null)
                 continue;

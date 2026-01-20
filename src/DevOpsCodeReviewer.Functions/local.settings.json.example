@@ -14,7 +14,6 @@
 
     "Llm__Endpoint": "https://your-openai.openai.azure.com/",
     "Llm__DeploymentName": "gpt-4o",
-    "Llm__ApiKey": "<your-api-key-for-local-dev>",
     "Llm__ApiKeySecretName": "foundry-api-key",
     "Llm__MaxTokens": "4096",
     "Llm__MaxFilesPerRequest": "10",

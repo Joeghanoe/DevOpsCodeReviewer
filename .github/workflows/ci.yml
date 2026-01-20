@@ -64,8 +64,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bicep
-        uses: azure/setup-bicep@v2
+      - name: Install Azure CLI & Bicep extension
+        uses: azure/cli@v1
+        with:
+          azcliversion: 'latest'
+          inlineScript: |
+            az bicep install
 
       - name: Lint Bicep files
         run: |

@@ -61,7 +61,7 @@ az account set --subscription "Your Subscription Name"
 
 # Deploy
 az deployment sub create \
-  --location eastus \
+  --location westeurope \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 ```

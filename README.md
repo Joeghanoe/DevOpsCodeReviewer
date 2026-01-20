@@ -57,7 +57,7 @@ az login
 
 # Deploy infrastructure
 az deployment sub create \
-  --location eastus \
+  --location westeurope \
   --template-file infra/main.bicep \
   --parameters infra/parameters/dev.bicepparam
 ```

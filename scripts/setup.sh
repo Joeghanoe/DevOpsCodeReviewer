@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Azure DevOps AI Code Reviewer - Interactive Setup Script
-# Usage: ./setup.sh [--environment dev|staging|prod] [--location eastus]
+# Usage: ./setup.sh [--environment dev|staging|prod] [--location westeurope]
 
 set -e
 
 # Default values
 ENVIRONMENT="dev"
-LOCATION="eastus"
+LOCATION="westeurope"
 SKIP_INFRA=false
 SKIP_DEPLOY=false
 

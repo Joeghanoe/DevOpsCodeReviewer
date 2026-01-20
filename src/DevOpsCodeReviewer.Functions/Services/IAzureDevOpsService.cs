@@ -79,5 +79,6 @@ public interface IAzureDevOpsService
         string repositoryId,
         int pullRequestId,
         int iterationId,
+        string? sourceCommitId,
         CancellationToken cancellationToken = default);
 }

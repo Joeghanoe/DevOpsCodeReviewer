@@ -1,16 +1,16 @@
 using '../main.bicep'
 
 param environment = 'prod'
-param location = 'eastus'
-param baseName = 'DevOpsCodeReviewer'
+param location = 'westeurope'
+param projectName = 'devops-agent'
 
 // Replace these with your actual values
 param adoOrganizationUrl = 'https://dev.azure.com/your-organization'
-param llmEndpoint = 'https://your-openai-prod.openai.azure.com/'
+param llmEndpoint = 'https://devops-agent-we-prd-oai.openai.azure.com/'
 param llmDeploymentName = 'gpt-4o'
 
 param tags = {
-  project: 'DevOpsCodeReviewer'
+  project: 'devops-agent'
   environment: 'prod'
   costCenter: 'production'
 }

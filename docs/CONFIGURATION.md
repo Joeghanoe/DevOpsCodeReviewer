@@ -44,7 +44,6 @@ package-lock.json, yarn.lock, pnpm-lock.yaml,
 |---------|-------------|---------|----------|
 | `Llm__Endpoint` | Azure OpenAI endpoint URL | - | Yes |
 | `Llm__DeploymentName` | Model deployment name | `gpt-4o` | No |
-| `Llm__ApiKey` | API key (local dev only) | - | No |
 | `Llm__ApiKeySecretName` | Key Vault secret name | `foundry-api-key` | No |
 | `Llm__MaxTokens` | Max response tokens | `4096` | No |
 | `Llm__Temperature` | Response temperature (0-1) | `0.3` | No |
@@ -104,7 +103,6 @@ package-lock.json, yarn.lock, pnpm-lock.yaml,
 
     "Llm__Endpoint": "https://myopenai.openai.azure.com/",
     "Llm__DeploymentName": "gpt-4o",
-    "Llm__ApiKey": "your-key-here",
 
     "Webhook__Secret": "my-secret-123"
   }

@@ -118,6 +118,7 @@ public class CodeReviewProcessor
             request.RepositoryId,
             request.PullRequestId,
             latestIteration.Id,
+            latestIteration.SourceRefCommit?.CommitId,
             cancellationToken);
 
         if (files.Count == 0)

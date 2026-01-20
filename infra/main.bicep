@@ -9,10 +9,10 @@ targetScope = 'subscription'
 param environment string = 'dev'
 
 @description('Location for all resources')
-param location string = 'eastus'
+param location string = 'westeurope'
 
-@description('Base name for resources')
-param baseName string = 'DevOpsCodeReviewer'
+@description('Project name for resources')
+param projectName string = 'devops-agent'
 
 @description('Azure DevOps organization URL')
 param adoOrganizationUrl string
@@ -29,22 +29,43 @@ param webhookSecret string = newGuid()
 
 @description('Tags to apply to all resources')
 param tags object = {
-  project: 'DevOpsCodeReviewer'
+  project: projectName
   environment: environment
 }
 
-// Generate unique suffix based on subscription
-var uniqueSuffix = uniqueString(subscription().subscriptionId, baseName, environment)
-var resourceGroupName = 'rg-${baseName}-${environment}'
+// Region abbreviation mapping
+var regionAbbreviations = {
+  westeurope: 'we'
+  westeurope2: 'eus2'
+  westus: 'wus'
+  westus2: 'wus2'
+  northeurope: 'ne'
+  uksouth: 'uks'
+  ukwest: 'ukw'
+}
+var regionAbbr = contains(regionAbbreviations, location) ? regionAbbreviations[location] : take(location, 3)
 
+// Environment abbreviation mapping
+var envAbbreviations = {
+  dev: 'dev'
+  staging: 'stg'
+  prod: 'prd'
+}
+var envAbbr = envAbbreviations[environment]
+
+// Resource group name (as specified by user)
+var resourceGroupName = projectName
+
+// Naming convention: projectname-region-environment-resourcetype
 // Resource names (must be globally unique where required)
-var storageAccountName = 'st${take(replace(baseName, '-', ''), 11)}${take(uniqueSuffix, 8)}'
-var serviceBusNamespaceName = 'sb-${baseName}-${environment}-${take(uniqueSuffix, 4)}'
-var keyVaultName = 'kv-${baseName}-${environment}'
-var appInsightsName = 'ai-${baseName}-${environment}'
-var logAnalyticsName = 'log-${baseName}-${environment}'
-var functionAppName = 'func-${baseName}-${environment}-${take(uniqueSuffix, 4)}'
-var appServicePlanName = 'asp-${baseName}-${environment}'
+var uniqueSuffix = uniqueString(subscription().subscriptionId, projectName, environment)
+var storageAccountName = '${replace(projectName, '-', '')}${regionAbbr}${envAbbr}st'
+var serviceBusNamespaceName = '${projectName}-${regionAbbr}-${envAbbr}-${uniqueSuffix}' // Since this must be unique globally
+var keyVaultName = '${projectName}-${regionAbbr}-${envAbbr}-kv'
+var appInsightsName = '${projectName}-${regionAbbr}-${envAbbr}-ai'
+var logAnalyticsName = '${projectName}-${regionAbbr}-${envAbbr}-log'
+var functionAppName = '${projectName}-${regionAbbr}-${envAbbr}-func'
+var appServicePlanName = '${projectName}-${regionAbbr}-${envAbbr}-asp'
 
 // Create resource group
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
@@ -55,7 +76,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 
 // Deploy storage account
 module storage 'modules/storage.bicep' = {
-  name: 'storage-deployment'
+  name: 'storage-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     storageAccountName: storageAccountName
@@ -67,7 +88,7 @@ module storage 'modules/storage.bicep' = {
 
 // Deploy Application Insights and Log Analytics
 module appInsights 'modules/app-insights.bicep' = {
-  name: 'appinsights-deployment'
+  name: 'appinsights-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     appInsightsName: appInsightsName
@@ -80,20 +101,20 @@ module appInsights 'modules/app-insights.bicep' = {
 
 // Deploy Service Bus
 module serviceBus 'modules/service-bus.bicep' = {
-  name: 'servicebus-deployment'
+  name: 'servicebus-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     namespaceName: serviceBusNamespaceName
     location: location
     tags: tags
-    sku: environment == 'prod' ? 'Standard' : 'Standard'
+    sku: 'Standard'
     queueName: 'codereview-requests'
   }
 }
 
 // Deploy Key Vault
 module keyVault 'modules/key-vault.bicep' = {
-  name: 'keyvault-deployment'
+  name: 'keyvault-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     keyVaultName: keyVaultName
@@ -104,7 +125,7 @@ module keyVault 'modules/key-vault.bicep' = {
 
 // Deploy Function App
 module functionApp 'modules/function-app.bicep' = {
-  name: 'functionapp-deployment'
+  name: 'functionapp-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     functionAppName: functionAppName
@@ -126,7 +147,7 @@ module functionApp 'modules/function-app.bicep' = {
 
 // Grant Function App access to Key Vault (after function app is created)
 module keyVaultAccess 'modules/key-vault.bicep' = {
-  name: 'keyvault-access-deployment'
+  name: 'keyvault-access-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     keyVaultName: keyVaultName
@@ -138,7 +159,7 @@ module keyVaultAccess 'modules/key-vault.bicep' = {
 
 // Grant Function App access to Service Bus
 module serviceBusAccess 'modules/service-bus.bicep' = {
-  name: 'servicebus-access-deployment'
+  name: 'servicebus-access-deployment-${uniqueSuffix}'
   scope: rg
   params: {
     namespaceName: serviceBusNamespaceName
