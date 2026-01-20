@@ -9,6 +9,15 @@ namespace DevOpsCodeReviewer.Infrastructure.Output;
 public interface IReviewOutputService
 {
     /// <summary>
+    /// Publishes the review overview as a PR comment.
+    /// </summary>
+    /// <param name="request">The code review request containing PR context.</param>
+    /// <param name="overview">The review overview.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the overview was successfully published.</returns>
+    Task<bool> PublishOverviewAsync(CodeReviewRequest request, ReviewOverview overview, CancellationToken ct);
+
+    /// <summary>
     /// Publishes a single code review comment.
     /// </summary>
     /// <param name="request">The code review request containing PR context.</param>

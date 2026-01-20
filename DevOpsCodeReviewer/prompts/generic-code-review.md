@@ -99,7 +99,23 @@ Always include a brief rationale for your severity choice in the message.
 
 ## Response Format
 
-Respond with a JSON object containing a `comments` array. Each comment must have:
+Respond with a JSON object containing:
+
+### Overview Section (Required)
+Provide a high-level summary of the PR changes:
+
+- `overview.summary`: A 2-4 sentence executive summary of what the PR accomplishes and your overall assessment
+- `overview.keyChanges`: Array of key changes, each with `description` (what changed) and `rationale` (why it matters)
+- `overview.importantFiles`: Array of files with significant changes, each with:
+  - `filePath`: Path to the file
+  - `score`: Impact score 1-5 (5 = highest impact)
+  - `description`: Brief description of changes in this file
+- `overview.confidenceScore`: Your confidence in the review (1-5)
+- `overview.confidenceRationale`: Brief explanation of your confidence score
+- `overview.riskAssessment`: "safe" | "low-risk" | "medium-risk" | "high-risk" | "critical-risk"
+
+### Comments Section
+An array of specific code comments. Each comment must have:
 
 - `filePath`: The file path
 - `lineNumber`: The line number (1-based)
@@ -125,6 +141,25 @@ Example response (note: lineNumber 12 matches `L 12` from the diff):
 
 ```json
 {
+  "overview": {
+    "summary": "This PR adds user lookup functionality but introduces a critical SQL injection vulnerability. The change accomplishes its goal but requires security fixes before merge.",
+    "keyChanges": [
+      {
+        "description": "Added database query to fetch user by ID",
+        "rationale": "Enables user profile lookup feature, but implementation is insecure"
+      }
+    ],
+    "importantFiles": [
+      {
+        "filePath": "src/example.ts",
+        "score": 5,
+        "description": "Contains SQL injection vulnerability in user query - requires immediate fix"
+      }
+    ],
+    "confidenceScore": 5,
+    "confidenceRationale": "Clear security vulnerability with well-understood fix pattern",
+    "riskAssessment": "critical-risk"
+  },
   "comments": [
     {
       "filePath": "src/example.ts",

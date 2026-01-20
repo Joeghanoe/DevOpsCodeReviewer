@@ -201,8 +201,15 @@ public class CodeReviewProcessor
         _logger.LogInformation("{UniqueCount} unique comments after duplicate filtering", uniqueComments.Count);
 
         // ═══════════════════════════════════════════════════════════════
-        // Step 4: Post Comments
+        // Step 4: Post Overview and Comments
         // ═══════════════════════════════════════════════════════════════
+        
+        // Post the overview first (if available)
+        if (reviewResponse.Overview != null)
+        {
+            await _reviewOutputService.PublishOverviewAsync(request, reviewResponse.Overview, cancellationToken);
+        }
+
         var postedCount = 0;
         foreach (var comment in uniqueComments)
         {

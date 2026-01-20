@@ -13,6 +13,12 @@ public class CodeReviewResponse
     [JsonPropertyName("summary")]
     public string? Summary { get; set; }
 
+    /// <summary>
+    /// High-level overview of the PR review (Greptile-style).
+    /// </summary>
+    [JsonPropertyName("overview")]
+    public ReviewOverview? Overview { get; set; }
+
     [JsonPropertyName("filesReviewed")]
     public int FilesReviewed { get; set; }
 
@@ -27,6 +33,69 @@ public class CodeReviewResponse
     /// </summary>
     [JsonPropertyName("contextSummary")]
     public ContextSummary? ContextSummary { get; set; }
+}
+
+/// <summary>
+/// High-level summary of the PR review, similar to Greptile's overview.
+/// </summary>
+public class ReviewOverview
+{
+    /// <summary>
+    /// Executive summary of what the PR accomplishes.
+    /// </summary>
+    [JsonPropertyName("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Key changes identified in the PR.
+    /// </summary>
+    [JsonPropertyName("keyChanges")]
+    public List<KeyChange> KeyChanges { get; set; } = [];
+
+    /// <summary>
+    /// Files with significant changes.
+    /// </summary>
+    [JsonPropertyName("importantFiles")]
+    public List<ImportantFile> ImportantFiles { get; set; } = [];
+
+    /// <summary>
+    /// Confidence score 1-5.
+    /// </summary>
+    [JsonPropertyName("confidenceScore")]
+    public int ConfidenceScore { get; set; }
+
+    /// <summary>
+    /// Explanation of confidence score.
+    /// </summary>
+    [JsonPropertyName("confidenceRationale")]
+    public string? ConfidenceRationale { get; set; }
+
+    /// <summary>
+    /// Risk assessment: safe, low-risk, medium-risk, high-risk, critical-risk.
+    /// </summary>
+    [JsonPropertyName("riskAssessment")]
+    public string RiskAssessment { get; set; } = "low-risk";
+}
+
+public class KeyChange
+{
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("rationale")]
+    public string? Rationale { get; set; }
+}
+
+public class ImportantFile
+{
+    [JsonPropertyName("filePath")]
+    public string FilePath { get; set; } = string.Empty;
+
+    [JsonPropertyName("score")]
+    public int Score { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
 }
 
 /// <summary>
