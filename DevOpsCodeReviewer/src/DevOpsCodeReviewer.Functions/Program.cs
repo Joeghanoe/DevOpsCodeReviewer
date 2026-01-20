@@ -7,16 +7,15 @@ using DevOpsCodeReviewer.Core.Workflows;
 using DevOpsCodeReviewer.Infrastructure.AI;
 using DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
-using DevOpsCodeReviewer.Infrastructure.Workflows;
 using DevOpsCodeReviewer.Infrastructure.Output;
-using Microsoft.Azure.Functions.Worker;
+using DevOpsCodeReviewer.Infrastructure.Workflows;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
-using ChatClient = OpenAI.Chat.ChatClient;
+using OpenAI.Chat;
 using Polly;
 using Polly.Extensions.Http;
 
@@ -91,7 +90,7 @@ var host = new HostBuilder()
         // ═══════════════════════════════════════════════════════════════
         // Infrastructure - Microsoft Agent Framework & AI
         // ═══════════════════════════════════════════════════════════════
-        services.AddSingleton<ChatClient>(sp =>
+        services.AddSingleton<IChatClient>(sp =>
         {
             var llmOptions = configuration.GetSection("Llm").Get<LlmOptions>()
                 ?? throw new InvalidOperationException("LLM configuration is required");
@@ -117,7 +116,8 @@ var host = new HostBuilder()
                 new Uri(llmOptions.Endpoint),
                 new System.ClientModel.ApiKeyCredential(apiKey));
 
-            return azureOpenAIClient.GetChatClient(llmOptions.DeploymentName);
+            ChatClient chatClient = azureOpenAIClient.GetChatClient(llmOptions.DeploymentName);
+            return chatClient.AsIChatClient();
         });
 
         services.AddSingleton<IPromptService, PromptService>();

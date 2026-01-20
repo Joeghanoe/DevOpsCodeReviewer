@@ -1,9 +1,9 @@
-using System.Collections.Concurrent;
-using System.Text;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
+using System.Text;
 
 namespace DevOpsCodeReviewer.Infrastructure.Output;
 

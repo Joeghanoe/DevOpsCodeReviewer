@@ -1,41 +1,31 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
+using DevOpsCodeReviewer.Infrastructure.AI.Models;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Agents.AI;
 using OpenAI.Chat;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace DevOpsCodeReviewer.Infrastructure.AI.Agents;
 
 /// <summary>
 /// Agent responsible for analyzing diff changes and identifying areas of concern.
 /// </summary>
-public class DiffAnalyzerAgent : IDiffAnalyzerAgent
+public class DiffAnalyzerAgent(
+    AIAgent agent,
+    ICodeAnalysisService codeAnalysisService,
+    ILogger<DiffAnalyzerAgent> logger) : IDiffAnalyzerAgent
 {
-    private readonly AIAgent _agent;
-    private readonly ICodeAnalysisService _codeAnalysisService;
-    private readonly LlmOptions _options;
-    private readonly ILogger<DiffAnalyzerAgent> _logger;
+    private readonly AIAgent _agent = agent;
+    private readonly ICodeAnalysisService _codeAnalysisService = codeAnalysisService;
+    private readonly ILogger<DiffAnalyzerAgent> _logger = logger;
 
     public string Name => "DiffAnalyzerAgent";
-
-    public DiffAnalyzerAgent(
-        AIAgent agent,
-        ICodeAnalysisService codeAnalysisService,
-        IPromptService promptService,
-        IOptions<LlmOptions> options,
-        ILogger<DiffAnalyzerAgent> logger)
-    {
-        _agent = agent;
-        _codeAnalysisService = codeAnalysisService;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     public async Task<DiffAnalysis> ExecuteAsync(DiffAnalyzerInput input, CancellationToken cancellationToken = default)
     {
@@ -202,29 +192,51 @@ public class DiffAnalyzerAgent : IDiffAnalyzerAgent
 
         try
         {
-            var userMessage = contextBuilder.ToString() + "\n\nAnalyze these changes and return a JSON object with 'concerns', 'focusAreas', and 'summary'.";
+            var userMessage = contextBuilder.ToString() + @"
 
-            var chatCompletion = await _agent.RunAsync([new UserChatMessage(userMessage)]);
-            var responseText = chatCompletion.Content.Last().Text;
+Analyze these changes and identify:
+1. Areas of concern (potential bugs, security issues, performance problems)
+2. Focus areas for review (what aspects need careful review)
+3. A brief summary of what the changes accomplish
 
-            // Parse the response
-            var jsonStart = responseText.IndexOf('{');
-            var jsonEnd = responseText.LastIndexOf('}');
+Provide severity levels (Low, Medium, High) for concerns and review depth (Surface, Standard, Deep) for focus areas.";
 
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            var response = await _agent.RunAsync([new UserChatMessage(userMessage)]);
+
+            // Extract text from response and deserialize
+            var responseText = response.AsChatResponse().Text;
+            var parsed = JsonSerializer.Deserialize<DiffAnalysisResponse>(responseText, JsonSerializerOptions.Web);
+
+            if (parsed != null)
             {
-                var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                var parsed = JsonSerializer.Deserialize<AnalysisResponse>(jsonContent, new JsonSerializerOptions
+                // Map DiffAnalysisResponse to internal types
+                if (parsed.Concerns != null)
                 {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (parsed != null)
-                {
-                    concerns = parsed.Concerns ?? [];
-                    focusAreas = parsed.FocusAreas ?? [];
-                    summary = parsed.Summary ?? "";
+                    foreach (var c in parsed.Concerns)
+                    {
+                        concerns.Add(new AreaOfConcern
+                        {
+                            FilePath = c.Area ?? "",
+                            Description = c.Reason ?? "",
+                            Severity = ParseSeverity(c.Severity),
+                            Type = ConcernType.Other
+                        });
+                    }
                 }
+
+                if (parsed.FocusAreas != null)
+                {
+                    foreach (var f in parsed.FocusAreas)
+                    {
+                        focusAreas.Add(new ReviewFocus
+                        {
+                            Title = f.Area ?? "",
+                            Description = $"{f.Reason ?? ""} (Review Depth: {f.SuggestedReviewDepth ?? "Standard"})"
+                        });
+                    }
+                }
+
+                summary = parsed.Summary ?? "";
             }
         }
         catch (Exception ex)
@@ -313,10 +325,14 @@ public class DiffAnalyzerAgent : IDiffAnalyzerAgent
         return concerns;
     }
 
-    private class AnalysisResponse
+    private static ConcernSeverity ParseSeverity(string? severity)
     {
-        public List<AreaOfConcern>? Concerns { get; set; }
-        public List<ReviewFocus>? FocusAreas { get; set; }
-        public string? Summary { get; set; }
+        return severity?.ToLowerInvariant() switch
+        {
+            "low" => ConcernSeverity.Low,
+            "medium" => ConcernSeverity.Medium,
+            "high" => ConcernSeverity.High,
+            _ => ConcernSeverity.Medium
+        };
     }
 }

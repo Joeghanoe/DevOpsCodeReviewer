@@ -1,7 +1,3 @@
-using System.Text.Json;
-using Azure.Messaging.ServiceBus;
-using DevOpsCodeReviewer.Functions.Models;
-using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 
 namespace DevOpsCodeReviewer.Functions.Functions;

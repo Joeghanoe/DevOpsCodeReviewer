@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
@@ -9,6 +8,7 @@ using DevOpsCodeReviewer.Infrastructure.Output;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace DevOpsCodeReviewer.Functions.Functions;
 
@@ -247,6 +247,12 @@ public class CodeReviewProcessor
         };
 
         var content = $"{severityEmoji} **[{comment.Category}]** {comment.Message}";
+
+        // Add concrete impact example if available
+        if (!string.IsNullOrEmpty(comment.ImpactExample))
+        {
+            content += $"\n\n**Example Impact:** {comment.ImpactExample}";
+        }
 
         if (!string.IsNullOrEmpty(comment.Suggestion))
         {

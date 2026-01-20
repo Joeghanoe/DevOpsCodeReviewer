@@ -1,45 +1,34 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
+using DevOpsCodeReviewer.Infrastructure.AI.Models;
 using DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Agents.AI;
 using OpenAI.Chat;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace DevOpsCodeReviewer.Infrastructure.AI.Agents;
 
 /// <summary>
 /// Agent responsible for gathering contextual information about the codebase.
 /// </summary>
-public class ContextGatheringAgent : IContextGatheringAgent
+public class ContextGatheringAgent(
+    AIAgent agent,
+    IAzureDevOpsService azureDevOpsService,
+    ICodeAnalysisService codeAnalysisService,
+    ILogger<ContextGatheringAgent> logger) : IContextGatheringAgent
 {
-    private readonly AIAgent _agent;
-    private readonly IAzureDevOpsService _azureDevOpsService;
-    private readonly ICodeAnalysisService _codeAnalysisService;
-    private readonly LlmOptions _options;
-    private readonly ILogger<ContextGatheringAgent> _logger;
+    private readonly AIAgent _agent = agent;
+    private readonly IAzureDevOpsService _azureDevOpsService = azureDevOpsService;
+    private readonly ICodeAnalysisService _codeAnalysisService = codeAnalysisService;
+    private readonly ILogger<ContextGatheringAgent> _logger = logger;
 
     public string Name => "ContextGatheringAgent";
-
-    public ContextGatheringAgent(
-        AIAgent agent,
-        IAzureDevOpsService azureDevOpsService,
-        ICodeAnalysisService codeAnalysisService,
-        IPromptService promptService,
-        IOptions<LlmOptions> options,
-        ILogger<ContextGatheringAgent> logger)
-    {
-        _agent = agent;
-        _azureDevOpsService = azureDevOpsService;
-        _codeAnalysisService = codeAnalysisService;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     public async Task<ContextResult> ExecuteAsync(ContextGatheringInput input, CancellationToken cancellationToken = default)
     {
@@ -157,16 +146,41 @@ public class ContextGatheringAgent : IContextGatheringAgent
     private static List<string> GetPossibleFilePaths(string importPath, string sourcePath)
     {
         var paths = new List<string>();
+
+        // Skip invalid paths (Windows absolute paths, empty, etc.)
+        if (string.IsNullOrWhiteSpace(importPath) ||
+            importPath.Contains(':') ||
+            importPath.Contains('\\'))
+        {
+            return paths;
+        }
+
         var sourceDir = Path.GetDirectoryName(sourcePath)?.Replace('\\', '/') ?? "";
         var sourceExt = Path.GetExtension(sourcePath);
 
-        // For relative imports
-        if (importPath.StartsWith("."))
+        // For relative imports (already resolved to repo paths)
+        if (importPath.StartsWith("/"))
+        {
+            // Try with same extension as source
+            if (!string.IsNullOrEmpty(sourceExt))
+                paths.Add(importPath + sourceExt);
+
+            // Try common extensions
+            paths.Add(importPath + ".ts");
+            paths.Add(importPath + ".tsx");
+            paths.Add(importPath + ".js");
+            paths.Add(importPath + ".jsx");
+            paths.Add(importPath + "/index.ts");
+            paths.Add(importPath + "/index.tsx");
+            paths.Add(importPath + "/index.js");
+        }
+        else if (importPath.StartsWith("."))
         {
             var resolved = Path.Combine(sourceDir, importPath).Replace('\\', '/');
 
             // Try with same extension as source
-            paths.Add(resolved + sourceExt);
+            if (!string.IsNullOrEmpty(sourceExt))
+                paths.Add(resolved + sourceExt);
 
             // Try common extensions
             paths.Add(resolved + ".ts");
@@ -179,11 +193,11 @@ public class ContextGatheringAgent : IContextGatheringAgent
         }
         else
         {
-            // For namespace imports (C#) or module imports
+            // For namespace imports (C# project namespaces - not system namespaces)
+            // These should be project-specific namespaces that made it through filtering
             var pathFromNamespace = importPath.Replace('.', '/');
             paths.Add($"/{pathFromNamespace}.cs");
             paths.Add($"/src/{pathFromNamespace}.cs");
-            paths.Add($"/src/{importPath.Replace('.', '/')}.cs");
         }
 
         return paths.Distinct().ToList();
@@ -219,27 +233,42 @@ public class ContextGatheringAgent : IContextGatheringAgent
 
         try
         {
-            var userMessage = contextBuilder.ToString() + "\n\nIdentify patterns and architectural insights in these files. Return a JSON object with 'patterns' and 'insights' arrays.";
+            var userMessage = contextBuilder.ToString() + "\n\nIdentify patterns and architectural insights in these files.";
 
-            var chatCompletion = await _agent.RunAsync([new UserChatMessage(userMessage)]);
-            var responseText = chatCompletion.Content.Last().Text;
+            var response = await _agent.RunAsync([new UserChatMessage(userMessage)]);
 
-            // Parse the response
-            var jsonStart = responseText.IndexOf('{');
-            var jsonEnd = responseText.LastIndexOf('}');
+            // Extract text from response and deserialize
+            var responseText = response.AsChatResponse().Text;
+            var parsed = JsonSerializer.Deserialize<PatternAnalysisResponse>(responseText, JsonSerializerOptions.Web);
 
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            if (parsed != null)
             {
-                var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                var parsed = JsonSerializer.Deserialize<PatternResponse>(jsonContent, new JsonSerializerOptions
+                // Map response to internal types
+                if (parsed.Patterns != null)
                 {
-                    PropertyNameCaseInsensitive = true
-                });
+                    foreach (var p in parsed.Patterns)
+                    {
+                        patterns.Add(new CodePattern
+                        {
+                            Name = p.Name ?? "",
+                            Description = p.Description ?? "",
+                            Category = ParsePatternCategory(p.Category),
+                            ImplementingFiles = p.ImplementingFiles ?? [],
+                            ExampleCode = p.ExampleCode ?? ""
+                        });
+                    }
+                }
 
-                if (parsed != null)
+                if (parsed.Insights != null)
                 {
-                    patterns = parsed.Patterns ?? [];
-                    insights = parsed.Insights ?? [];
+                    foreach (var i in parsed.Insights)
+                    {
+                        insights.Add(new ArchitectureInsight
+                        {
+                            Title = i.Title ?? "",
+                            Description = $"{i.Description ?? ""} Impact: {i.Impact ?? "Unknown"}"
+                        });
+                    }
                 }
             }
         }
@@ -305,9 +334,19 @@ public class ContextGatheringAgent : IContextGatheringAgent
         return patterns;
     }
 
-    private class PatternResponse
+    private static PatternCategory ParsePatternCategory(string? category)
     {
-        public List<CodePattern>? Patterns { get; set; }
-        public List<ArchitectureInsight>? Insights { get; set; }
+        return category?.ToLowerInvariant() switch
+        {
+            "errorhandling" or "error handling" or "error_handling" => PatternCategory.ErrorHandling,
+            "logging" => PatternCategory.Logging,
+            "validation" => PatternCategory.Validation,
+            "dataaccess" or "data access" or "data_access" => PatternCategory.DataAccess,
+            "dependencyinjection" or "dependency injection" or "di" => PatternCategory.DependencyInjection,
+            "authentication" or "auth" => PatternCategory.Authentication,
+            "configuration" or "config" => PatternCategory.Configuration,
+            "testing" or "test" => PatternCategory.Testing,
+            _ => PatternCategory.Other
+        };
     }
 }

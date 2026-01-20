@@ -1,14 +1,13 @@
-using Azure.AI.OpenAI;
-using Azure.Identity;
 using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Services;
 using DevOpsCodeReviewer.Infrastructure.AI.Agents;
+using DevOpsCodeReviewer.Infrastructure.AI.Models;
 using DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 
 namespace DevOpsCodeReviewer.Infrastructure.AI;
@@ -16,70 +15,82 @@ namespace DevOpsCodeReviewer.Infrastructure.AI;
 /// <summary>
 /// Factory for creating agents using Azure OpenAI via Microsoft Agent Framework.
 /// </summary>
-public class AzureOpenAIAgentFactory : IAgentFactory
+public class AzureOpenAIAgentFactory(
+    IChatClient chatClient,
+    IAzureDevOpsService azureDevOpsService,
+    ICodeAnalysisService codeAnalysisService,
+    IPromptService promptService,
+    IOptions<LlmOptions> options,
+    ILoggerFactory loggerFactory) : IAgentFactory
 {
-    private readonly IChatClient _chatClient;
-    private readonly IAzureDevOpsService _azureDevOpsService;
-    private readonly ICodeAnalysisService _codeAnalysisService;
-    private readonly IPromptService _promptService;
-    private readonly IOptions<LlmOptions> _options;
-    private readonly ILoggerFactory _loggerFactory;
-
-    public AzureOpenAIAgentFactory(
-        IChatClient chatClient,
-        IAzureDevOpsService azureDevOpsService,
-        ICodeAnalysisService codeAnalysisService,
-        IPromptService promptService,
-        IOptions<LlmOptions> options,
-        ILoggerFactory loggerFactory)
-    {
-        _chatClient = chatClient;
-        _azureDevOpsService = azureDevOpsService;
-        _codeAnalysisService = codeAnalysisService;
-        _promptService = promptService;
-        _options = options;
-        _loggerFactory = loggerFactory;
-    }
+    private readonly IChatClient _chatClient = chatClient;
+    private readonly IAzureDevOpsService _azureDevOpsService = azureDevOpsService;
+    private readonly ICodeAnalysisService _codeAnalysisService = codeAnalysisService;
+    private readonly IPromptService _promptService = promptService;
+    private readonly IOptions<LlmOptions> _options = options;
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
     public IContextGatheringAgent CreateContextGatheringAgent()
     {
-        var agent = new ChatClientAgent(
-            _chatClient, 
-            _promptService.GetContextGatheringPrompt());
+        var chatOptions = new Microsoft.Extensions.AI.ChatOptions
+        {
+            Instructions = _promptService.GetContextGatheringPrompt(),
+            ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<PatternAnalysisResponse>(
+                schemaDescription: "Identified code patterns and architectural insights")
+        };
+
+        var agent = _chatClient.CreateAIAgent(new ChatClientAgentOptions
+        {
+            Name = "ContextGatheringAgent",
+            ChatOptions = chatOptions
+        });
 
         return new ContextGatheringAgent(
             agent,
             _azureDevOpsService,
             _codeAnalysisService,
-            _promptService,
-            _options,
             _loggerFactory.CreateLogger<ContextGatheringAgent>());
     }
 
     public IDiffAnalyzerAgent CreateDiffAnalyzerAgent()
     {
-        var agent = new ChatClientAgent(
-            _chatClient,
-            _promptService.GetDiffAnalysisPrompt());
+        var chatOptions = new Microsoft.Extensions.AI.ChatOptions
+        {
+            Instructions = _promptService.GetDiffAnalysisPrompt(),
+            ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<DiffAnalysisResponse>(
+                schemaDescription: "Analysis of code diff changes including concerns, focus areas, and summary")
+        };
+
+        var agent = _chatClient.CreateAIAgent(new ChatClientAgentOptions
+        {
+            Name = "DiffAnalyzerAgent",
+            ChatOptions = chatOptions
+        });
 
         return new DiffAnalyzerAgent(
             agent,
             _codeAnalysisService,
-            _promptService,
-            _options,
             _loggerFactory.CreateLogger<DiffAnalyzerAgent>());
     }
 
     public ICodeReviewAgent CreateCodeReviewAgent()
     {
-        var agent = new ChatClientAgent(
-            _chatClient,
-            _promptService.GetCodeReviewPrompt());
+        var chatOptions = new Microsoft.Extensions.AI.ChatOptions
+        {
+            Instructions = _promptService.GetCodeReviewPrompt(),
+            ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<CodeReviewLlmResponse>(
+                schemaDescription: "Code review comments with severity and suggestions")
+        };
+
+        var agent = _chatClient.CreateAIAgent(new ChatClientAgentOptions
+        {
+            Name = "CodeReviewAgent",
+            ChatOptions = chatOptions
+        });
 
         return new CodeReviewAgent(
             agent,
             _codeAnalysisService,
-            _promptService,
             _options,
             _loggerFactory.CreateLogger<CodeReviewAgent>());
     }

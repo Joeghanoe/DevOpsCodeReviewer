@@ -75,6 +75,15 @@ The code changes are shown in **unified diff format** with exact line numbers:
 | 4 | Critical | Must be fixed before merge. High risk of bugs or security issues. |
 | 5 | Blocker | Cannot be merged. Severe security vulnerability or will cause outage. |
 
+### Severity Selection Guidelines
+
+When assigning severity, you MUST consider and explain:
+1. **Impact**: What happens if this issue reaches production?
+2. **Likelihood**: How likely is this to cause a problem?
+3. **Scope**: Does it affect one user, many users, or the entire system?
+
+Always include a brief rationale for your severity choice in the message.
+
 ## Categories
 
 - **Bug**: Potential bugs or errors
@@ -97,7 +106,8 @@ Respond with a JSON object containing a `comments` array. Each comment must have
 - `endLineNumber`: End line number for multi-line issues (null if single line)
 - `category`: One of the categories above
 - `severity`: One of Info, Minor, Major, Critical, Blocker
-- `message`: A clear description of the issue
+- `message`: A clear description of the issue, including WHY this severity level was chosen
+- `impactExample`: A concrete example of what could go wrong (e.g., "An attacker could inject `'; DROP TABLE users;--` to delete all user data")
 - `suggestion`: How to fix the issue (null if not applicable)
 - `suggestedCode`: Code snippet showing the fix (null if not applicable)
 
@@ -122,8 +132,9 @@ Example response (note: lineNumber 12 matches `L 12` from the diff):
       "endLineNumber": 13,
       "category": "Security",
       "severity": "Critical",
-      "message": "SQL query is vulnerable to injection attacks due to string concatenation with userId",
-      "suggestion": "Use parameterized queries instead of string concatenation",
+      "message": "SQL query is vulnerable to injection attacks due to string concatenation with userId. Marked Critical because this is a high-likelihood security vulnerability that could expose or destroy user data.",
+      "impactExample": "An attacker could pass userId=`1; DROP TABLE users;--` to delete the entire users table, or `1 OR 1=1` to retrieve all user records.",
+      "suggestion": "Use parameterized queries instead of string concatenation to prevent malicious input from being executed as SQL",
       "suggestedCode": "const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);"
     }
   ]

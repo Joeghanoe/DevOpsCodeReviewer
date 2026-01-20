@@ -1,10 +1,10 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
 using DevOpsCodeReviewer.Core.Configuration;
 using DevOpsCodeReviewer.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace DevOpsCodeReviewer.Core.Services;
 
@@ -342,6 +342,25 @@ public class CodeAnalysisService : ICodeAnalysisService
         return imports;
     }
 
+    // Prefixes that indicate system/framework namespaces (not user code)
+    private static readonly string[] SystemNamespacePrefixes =
+    [
+        "System",
+        "Microsoft",
+        "Azure",
+        "Newtonsoft",
+        "NuGet",
+        "Polly",
+        "Serilog",
+        "AutoMapper",
+        "FluentValidation",
+        "MediatR",
+        "Moq",
+        "xunit",
+        "NUnit",
+        "MSTest"
+    ];
+
     private static List<string> ParseCSharpUsings(string content)
     {
         var usings = new List<string>();
@@ -351,18 +370,37 @@ public class CodeAnalysisService : ICodeAnalysisService
         {
             if (match.Success && match.Groups.Count > 1)
             {
-                usings.Add(match.Groups[1].Value);
+                var ns = match.Groups[1].Value;
+
+                // Skip system/framework namespaces - they're from NuGet packages, not the repo
+                if (IsSystemNamespace(ns))
+                    continue;
+
+                usings.Add(ns);
             }
         }
 
         return usings;
     }
 
+    private static bool IsSystemNamespace(string ns)
+    {
+        foreach (var prefix in SystemNamespacePrefixes)
+        {
+            if (ns.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                ns.StartsWith(prefix + ".", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static List<string> ParseTypeScriptImports(string content, string currentFile)
     {
         var imports = new List<string>();
         var matches = TypeScriptImportRegex.Matches(content);
-        var currentDir = Path.GetDirectoryName(currentFile) ?? "";
+        var currentDir = Path.GetDirectoryName(currentFile)?.Replace('\\', '/') ?? "";
 
         foreach (Match match in matches)
         {
@@ -370,12 +408,47 @@ public class CodeAnalysisService : ICodeAnalysisService
             {
                 var importPath = match.Groups[1].Value;
 
-                // Skip node_modules imports
+                // Skip node_modules imports (non-relative paths)
                 if (!importPath.StartsWith(".") && !importPath.StartsWith("/"))
                     continue;
 
-                // Resolve relative path
-                var resolvedPath = Path.GetFullPath(Path.Combine(currentDir, importPath));
+                // Skip absolute Windows paths (these are invalid for repo paths)
+                if (importPath.Contains(':') || importPath.Contains('\\'))
+                    continue;
+
+                // Normalize path separators
+                importPath = importPath.Replace('\\', '/');
+
+                // Resolve relative path manually to keep it as a repo path
+                string resolvedPath;
+                if (importPath.StartsWith("./"))
+                {
+                    resolvedPath = $"{currentDir}/{importPath[2..]}";
+                }
+                else if (importPath.StartsWith("../"))
+                {
+                    // Handle parent directory references
+                    var parts = currentDir.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+                    var importParts = importPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (var part in importParts)
+                    {
+                        if (part == ".." && parts.Count > 0)
+                            parts.RemoveAt(parts.Count - 1);
+                        else if (part != ".")
+                            parts.Add(part);
+                    }
+                    resolvedPath = "/" + string.Join("/", parts);
+                }
+                else
+                {
+                    resolvedPath = importPath;
+                }
+
+                // Ensure path starts with /
+                if (!resolvedPath.StartsWith('/'))
+                    resolvedPath = "/" + resolvedPath;
+
                 imports.Add(resolvedPath);
             }
         }

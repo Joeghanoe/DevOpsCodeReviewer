@@ -1,6 +1,3 @@
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 using Azure.Security.KeyVault.Secrets;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
@@ -8,6 +5,9 @@ using DevOpsCodeReviewer.Infrastructure.AzureDevOps.Models;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 

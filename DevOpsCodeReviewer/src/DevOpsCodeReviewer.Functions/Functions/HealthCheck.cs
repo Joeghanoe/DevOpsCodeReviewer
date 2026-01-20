@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Reflection;
 
 namespace DevOpsCodeReviewer.Functions.Functions;
 

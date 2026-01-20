@@ -1,41 +1,33 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
+using DevOpsCodeReviewer.Infrastructure.AI.Models;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Agents.AI;
 using OpenAI.Chat;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace DevOpsCodeReviewer.Infrastructure.AI.Agents;
 
 /// <summary>
 /// Agent responsible for performing contextual code review.
 /// </summary>
-public class CodeReviewAgent : ICodeReviewAgent
+public class CodeReviewAgent(
+    AIAgent agent,
+    ICodeAnalysisService codeAnalysisService,
+    IOptions<LlmOptions> options,
+    ILogger<CodeReviewAgent> logger) : ICodeReviewAgent
 {
-    private readonly AIAgent _agent;
-    private readonly ICodeAnalysisService _codeAnalysisService;
-    private readonly LlmOptions _options;
-    private readonly ILogger<CodeReviewAgent> _logger;
+    private readonly AIAgent _agent = agent;
+    private readonly ICodeAnalysisService _codeAnalysisService = codeAnalysisService;
+    private readonly LlmOptions _options = options.Value;
+    private readonly ILogger<CodeReviewAgent> _logger = logger;
 
     public string Name => "CodeReviewAgent";
-
-    public CodeReviewAgent(
-        AIAgent agent,
-        ICodeAnalysisService codeAnalysisService,
-        IPromptService promptService,
-        IOptions<LlmOptions> options,
-        ILogger<CodeReviewAgent> logger)
-    {
-        _agent = agent;
-        _codeAnalysisService = codeAnalysisService;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     public async Task<CodeReviewResponse> ExecuteAsync(CodeReviewInput input, CancellationToken cancellationToken = default)
     {
@@ -216,29 +208,31 @@ public class CodeReviewAgent : ICodeReviewAgent
         contextBuilder.AppendLine("2. Reference existing patterns when suggesting improvements");
         contextBuilder.AppendLine("3. Use exact line numbers from the diff (L###)");
         contextBuilder.AppendLine("4. Only flag issues that aren't already handled by existing patterns");
-        contextBuilder.AppendLine();
-        contextBuilder.AppendLine("Return a JSON object with 'comments' array containing your review comments.");
 
         try
         {
-            var chatCompletion = await _agent.RunAsync([new UserChatMessage(contextBuilder.ToString())]);
-            var responseText = chatCompletion.Content.Last().Text;
+            ChatCompletion agentResponse = await _agent.RunAsync([new UserChatMessage(contextBuilder.ToString())]);
 
-            // Parse the response
-            var jsonStart = responseText.IndexOf('{');
-            var jsonEnd = responseText.LastIndexOf('}');
+            // Extract text from response and deserialize
+            var responseText = agentResponse.AsChatResponse().Text;
+            var parsed = JsonSerializer.Deserialize<CodeReviewLlmResponse>(responseText, JsonSerializerOptions.Web);
 
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            if (parsed?.Comments != null)
             {
-                var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                var parsed = JsonSerializer.Deserialize<ReviewResponse>(jsonContent, new JsonSerializerOptions
+                // Map response to internal types
+                foreach (var c in parsed.Comments)
                 {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (parsed?.Comments != null)
-                {
-                    response.Comments = parsed.Comments;
+                    response.Comments.Add(new ReviewComment
+                    {
+                        FilePath = c.FilePath ?? "",
+                        LineNumber = c.LineNumber ?? 0,
+                        Severity = ParseSeverity(c.Severity),
+                        Category = ParseCategory(c.Category),
+                        Message = c.Message ?? "",
+                        ImpactExample = c.ImpactExample,
+                        Suggestion = c.Suggestion ?? "",
+                        RelatedCodeReference = c.RelatedPattern
+                    });
                 }
             }
         }
@@ -340,8 +334,33 @@ public class CodeReviewAgent : ICodeReviewAgent
         return sb.ToString();
     }
 
-    private class ReviewResponse
+    private static ReviewSeverity ParseSeverity(string? severity)
     {
-        public List<ReviewComment>? Comments { get; set; }
+        return severity?.ToLowerInvariant() switch
+        {
+            "info" => ReviewSeverity.Info,
+            "minor" => ReviewSeverity.Minor,
+            "major" => ReviewSeverity.Major,
+            "critical" => ReviewSeverity.Critical,
+            "blocker" => ReviewSeverity.Blocker,
+            _ => ReviewSeverity.Minor
+        };
+    }
+
+    private static ReviewCategory ParseCategory(string? category)
+    {
+        return category?.ToLowerInvariant() switch
+        {
+            "bug" => ReviewCategory.Bug,
+            "security" => ReviewCategory.Security,
+            "performance" => ReviewCategory.Performance,
+            "style" => ReviewCategory.Style,
+            "bestpractice" or "best practice" or "best_practice" => ReviewCategory.BestPractice,
+            "maintainability" => ReviewCategory.Maintainability,
+            "errorhandling" or "error handling" or "error_handling" => ReviewCategory.ErrorHandling,
+            "documentation" => ReviewCategory.Documentation,
+            "testing" => ReviewCategory.Testing,
+            _ => ReviewCategory.Other
+        };
     }
 }

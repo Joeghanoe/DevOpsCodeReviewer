@@ -32,6 +32,12 @@ public class ReviewComment
     public string? SuggestedCode { get; set; }
 
     /// <summary>
+    /// Concrete example of what could go wrong if the issue isn't fixed.
+    /// </summary>
+    [JsonPropertyName("impactExample")]
+    public string? ImpactExample { get; set; }
+
+    /// <summary>
     /// SHA256 fingerprint for duplicate detection.
     /// </summary>
     [JsonIgnore]
