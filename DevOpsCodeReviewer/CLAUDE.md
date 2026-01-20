@@ -8,12 +8,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build solution
 dotnet build DevOpsPipelineAgent.sln
 
-# Run tests
-dotnet test DevOpsCodeReviewer.Tests
-
-# Run a single test
-dotnet test DevOpsCodeReviewer.Tests --filter "FullyQualifiedName~WebhookHandlerTests.ParsePayload_ValidPullRequestCreated"
-
 # Run Azure Functions locally
 cd DevOpsCodeReviewer.Functions && func start
 ```
