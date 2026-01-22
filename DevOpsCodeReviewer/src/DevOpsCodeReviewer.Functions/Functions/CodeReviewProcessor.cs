@@ -84,15 +84,15 @@ public class CodeReviewProcessor
                 request.RepositoryId,
                 request.PullRequestId,
                 "pending",
-                "AI code review in progress...",
+                "PR Agent - AI code review in progress...",
                 cancellationToken);
 
             var commentCount = await ProcessReviewAsync(request, cancellationToken);
 
             // Set PR status to succeeded
             var statusDescription = commentCount > 0
-                ? $"Review complete: {commentCount} comment(s) posted"
-                : "Review complete: No issues found";
+                ? $"PR Agent - Review complete: {commentCount} comment(s) posted"
+                : "PR Agent - Review complete: No issues found";
 
             await _adoService.SetPullRequestStatusAsync(
                 request.OrganizationUrl,
@@ -124,7 +124,7 @@ public class CodeReviewProcessor
                         request.RepositoryId,
                         request.PullRequestId,
                         "failed",
-                        "AI code review failed. See logs for details.",
+                        "PR Agent - AI code review failed. See logs for details.",
                         cancellationToken);
                 }
                 catch (Exception statusEx)
