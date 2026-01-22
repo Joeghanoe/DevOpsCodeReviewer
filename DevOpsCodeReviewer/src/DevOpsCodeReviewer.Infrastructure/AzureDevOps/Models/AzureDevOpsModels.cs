@@ -262,3 +262,57 @@ public class CommitRef
     [JsonPropertyName("url")]
     public string? Url { get; set; }
 }
+
+/// <summary>
+/// Request to create or update a pull request status.
+/// </summary>
+public class CreatePullRequestStatusRequest
+{
+    [JsonPropertyName("state")]
+    public string State { get; set; } = "pending";
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("targetUrl")]
+    public string? TargetUrl { get; set; }
+
+    [JsonPropertyName("context")]
+    public StatusContext Context { get; set; } = new();
+}
+
+/// <summary>
+/// Context identifier for the status (genre + name).
+/// </summary>
+public class StatusContext
+{
+    [JsonPropertyName("genre")]
+    public string Genre { get; set; } = "code-review";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "AI Code Review";
+}
+
+/// <summary>
+/// Pull request status response from Azure DevOps.
+/// </summary>
+public class PullRequestStatus
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("context")]
+    public StatusContext? Context { get; set; }
+
+    [JsonPropertyName("creationDate")]
+    public DateTime CreationDate { get; set; }
+
+    [JsonPropertyName("updatedDate")]
+    public DateTime UpdatedDate { get; set; }
+}

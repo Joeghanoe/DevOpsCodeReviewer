@@ -71,8 +71,10 @@ public class PromptService : IPromptService
             .OrderByDescending(g => g.Count())
             .FirstOrDefault()?.Key ?? ".txt";
 
+        var promptBuilder = new System.Text.StringBuilder();
+
         // Load generic prompt
-        var genericPrompt = LoadPromptFile("generic-code-review.md");
+        promptBuilder.AppendLine(LoadPromptFile("generic-code-review.md"));
 
         // Load language-specific prompt if available
         if (ExtensionToPromptFile.TryGetValue(dominantExtension, out var promptFile))
@@ -80,11 +82,34 @@ public class PromptService : IPromptService
             var languagePrompt = LoadPromptFile(promptFile);
             if (!string.IsNullOrEmpty(languagePrompt))
             {
-                return $"{genericPrompt}\n\n{languagePrompt}";
+                promptBuilder.AppendLine();
+                promptBuilder.AppendLine(languagePrompt);
             }
         }
 
-        return genericPrompt;
+        // Always load core principles (Architecture, Security, Cloud)
+        var architecturalPrinciples = LoadPromptFile("principles/architectural-principles.md");
+        if (!string.IsNullOrEmpty(architecturalPrinciples))
+        {
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine(architecturalPrinciples);
+        }
+
+        var securityPrinciples = LoadPromptFile("principles/security-principles.md");
+        if (!string.IsNullOrEmpty(securityPrinciples))
+        {
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine(securityPrinciples);
+        }
+
+        var cloudPrinciples = LoadPromptFile("principles/cloud-principles.md");
+        if (!string.IsNullOrEmpty(cloudPrinciples))
+        {
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine(cloudPrinciples);
+        }
+
+        return promptBuilder.ToString();
     }
 
     public string GetContextGatheringPrompt()

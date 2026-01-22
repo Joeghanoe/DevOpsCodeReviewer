@@ -351,4 +351,48 @@ public class AzureDevOpsService : IAzureDevOpsService
         var extension = Path.GetExtension(path);
         return _options.IncludedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
     }
+
+    public async Task<PullRequestStatus?> SetPullRequestStatusAsync(
+        string organizationUrl,
+        string projectId,
+        string repositoryId,
+        int pullRequestId,
+        string state,
+        string description,
+        CancellationToken cancellationToken = default)
+    {
+        var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/statuses");
+
+        _logger.LogDebug("Setting PR status for PR {PullRequestId}: {State} - {Description}",
+            pullRequestId, state, description);
+
+        var statusRequest = new CreatePullRequestStatusRequest
+        {
+            State = state,
+            Description = description,
+            Context = new StatusContext
+            {
+                Genre = "code-review",
+                Name = "AI Code Review"
+            }
+        };
+
+        var httpRequest = await CreateRequestAsync(HttpMethod.Post, url, cancellationToken);
+        httpRequest.Content = new StringContent(
+            JsonSerializer.Serialize(statusRequest, _jsonOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError("Failed to set PR status: {StatusCode} - {Error}", response.StatusCode, errorContent);
+            return null;
+        }
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<PullRequestStatus>(content, _jsonOptions);
+    }
 }

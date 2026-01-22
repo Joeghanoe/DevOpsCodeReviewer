@@ -391,6 +391,8 @@ public class CodeReviewAgent(
             "errorhandling" or "error handling" or "error_handling" => ReviewCategory.ErrorHandling,
             "documentation" => ReviewCategory.Documentation,
             "testing" => ReviewCategory.Testing,
+            "architecture" or "architectural" => ReviewCategory.Architecture,
+            "cloudcompliance" or "cloud compliance" or "cloud_compliance" or "cloud" => ReviewCategory.CloudCompliance,
             _ => ReviewCategory.Other
         };
     }

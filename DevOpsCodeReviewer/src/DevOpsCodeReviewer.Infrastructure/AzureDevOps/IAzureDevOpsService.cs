@@ -82,4 +82,16 @@ public interface IAzureDevOpsService
         int iterationId,
         string? sourceCommitId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the status of a pull request (pending, succeeded, failed, etc.).
+    /// </summary>
+    Task<PullRequestStatus?> SetPullRequestStatusAsync(
+        string organizationUrl,
+        string projectId,
+        string repositoryId,
+        int pullRequestId,
+        string state,
+        string description,
+        CancellationToken cancellationToken = default);
 }

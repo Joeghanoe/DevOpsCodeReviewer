@@ -87,7 +87,7 @@ Always include a brief rationale for your severity choice in the message.
 ## Categories
 
 - **Bug**: Potential bugs or errors
-- **Security**: Security vulnerabilities
+- **Security**: Security vulnerabilities (enhanced with S.1-S.10 principles)
 - **Performance**: Performance issues
 - **Style**: Code style and formatting
 - **BestPractice**: Best practices and patterns
@@ -95,6 +95,8 @@ Always include a brief rationale for your severity choice in the message.
 - **ErrorHandling**: Error handling issues
 - **Documentation**: Documentation and comments
 - **Testing**: Testing concerns
+- **Architecture**: Architectural principle violations (A.8-A.20: service coupling, versioning, async patterns)
+- **CloudCompliance**: Cloud/DevOps principle violations (stateless, DRY, n-1 frameworks, testability)
 - **Other**: Other suggestions
 
 ## Response Format

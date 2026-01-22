@@ -65,7 +65,11 @@ public enum ReviewCategory
     ErrorHandling,
     Documentation,
     Testing,
-    Other
+    Other,
+
+    // Core Principle Violations
+    Architecture,      // A.1-A.20 violations
+    CloudCompliance    // Cloud/DevOps principles
 }
 
 /// <summary>

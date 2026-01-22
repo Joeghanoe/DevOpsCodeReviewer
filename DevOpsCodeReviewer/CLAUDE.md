@@ -2,19 +2,30 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build and Test Commands
+## Build and Run Commands
 
 ```bash
 # Build solution
 dotnet build DevOpsPipelineAgent.sln
 
 # Run Azure Functions locally
-cd DevOpsCodeReviewer.Functions && func start
+cd src/DevOpsCodeReviewer.Functions && func start
 ```
 
 ## Architecture
 
-This is an Azure Functions application that provides automated AI-powered code review for Azure DevOps pull requests.
+This is an Azure Functions application that provides automated AI-powered code review for Azure DevOps pull requests using a multi-agent pipeline.
+
+### Project Structure
+
+```
+src/
+├── DevOpsCodeReviewer.Core/           # Domain logic (no external dependencies)
+├── DevOpsCodeReviewer.Infrastructure/ # External integrations (Azure, OpenAI, DevOps)
+└── DevOpsCodeReviewer.Functions/      # Azure Functions host (thin orchestration layer)
+```
+
+Dependencies flow outward: Functions → Infrastructure → Core. Core has zero infrastructure dependencies.
 
 ### Request Flow
 
@@ -23,16 +34,25 @@ This is an Azure Functions application that provides automated AI-powered code r
 2. **CodeReviewProcessor** (`Functions/CodeReviewProcessor.cs`) - Service Bus trigger processes queued review requests:
    - Fetches PR iterations and changed files via `AzureDevOpsService`
    - Filters and prioritizes files via `CodeAnalysisService`
-   - Sends code to LLM for review via `LlmService`
+   - Executes three-agent pipeline: ContextGatheringAgent → DiffAnalyzerAgent → CodeReviewAgent
    - Posts review comments back to the PR via `IReviewOutputService`
 
 ### Key Services
 
-- **AzureDevOpsService** - REST API client for Azure DevOps (PR details, iterations, file content, comment threads)
-- **LlmService** - Azure OpenAI integration using structured JSON output for review responses
+**Core Layer:**
 - **CodeAnalysisService** - File filtering, chunking, duplicate detection, and prioritization logic
-- **PromptService** - Loads language-specific prompt templates from `prompts/` directory
 - **DiffService** - Computes unified diff hunks between original and modified files
+
+**Infrastructure Layer:**
+- **AzureDevOpsService** - REST API client for Azure DevOps (PR details, iterations, file content, comment threads)
+- **AzureOpenAIAgentFactory** - Creates configured agents for the review pipeline
+- **PromptService** - Loads language-specific prompt templates from `prompts/` directory
+- **CodeReviewWorkflow** - Orchestrates the sequential agent pipeline
+
+**Agents (in `Infrastructure/AI/Agents/`):**
+- **ContextGatheringAgent** - Parses imports, fetches related files, identifies patterns
+- **DiffAnalyzerAgent** - Categorizes changes and identifies concerns
+- **CodeReviewAgent** - Performs contextual review with full context
 
 ### Output Services
 
@@ -46,6 +66,7 @@ Configuration is bound via `IOptions<T>` pattern:
 - `ServiceBus` - Connection string and queue name
 - `Webhook` - Secret for webhook validation
 - `ReviewOutput` - Output configuration
+- `KeyVault` - Vault URL for secret resolution
 
 Secrets can be provided directly in config (local dev) or via Key Vault secret names (production).
 
@@ -56,10 +77,11 @@ Located in `prompts/` directory:
 - `csharp-code-review.md` - C#/.NET specific patterns
 - `typescript-code-review.md` - TypeScript/JavaScript/React patterns
 
-The LLM response follows a strict JSON schema defined in `LlmService.GetResponseSchema()` with categories (Bug, Security, Performance, etc.) and severity levels (Info, Minor, Major, Critical, Blocker).
+Prompt selection: `.cs` → csharp, `.ts`/`.tsx`/`.js`/`.jsx` → typescript, others → generic.
 
-## Testing
+The LLM response follows strict JSON schemas defined in `Infrastructure/AI/Models/` with categories (Bug, Security, Performance, etc.) and severity levels (Info, Minor, Major, Critical, Blocker).
 
-- Unit tests use xUnit, FluentAssertions, and Moq
-- Test fixtures in `DevOpsCodeReviewer.Tests/Fixtures/` are excluded from compilation (content files only)
-- Global usings for test namespaces are configured in the test project
+## Adding New Language Prompts
+
+1. Create `prompts/{language}-code-review.md` following existing structure
+2. Update `PromptService.cs` to map file extensions to the new prompt

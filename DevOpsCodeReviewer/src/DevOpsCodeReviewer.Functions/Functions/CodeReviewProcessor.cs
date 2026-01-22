@@ -77,7 +77,31 @@ public class CodeReviewProcessor
             _logger.LogInformation("Processing code review for PR #{PullRequestId} using agent pipeline",
                 request.PullRequestId);
 
-            await ProcessReviewAsync(request, cancellationToken);
+            // Set PR status to pending
+            await _adoService.SetPullRequestStatusAsync(
+                request.OrganizationUrl,
+                request.ProjectId,
+                request.RepositoryId,
+                request.PullRequestId,
+                "pending",
+                "AI code review in progress...",
+                cancellationToken);
+
+            var commentCount = await ProcessReviewAsync(request, cancellationToken);
+
+            // Set PR status to succeeded
+            var statusDescription = commentCount > 0
+                ? $"Review complete: {commentCount} comment(s) posted"
+                : "Review complete: No issues found";
+
+            await _adoService.SetPullRequestStatusAsync(
+                request.OrganizationUrl,
+                request.ProjectId,
+                request.RepositoryId,
+                request.PullRequestId,
+                "succeeded",
+                statusDescription,
+                cancellationToken);
 
             // Complete the message
             await messageActions.CompleteMessageAsync(message, cancellationToken);
@@ -89,12 +113,32 @@ public class CodeReviewProcessor
             _logger.LogError(ex, "Error processing code review for PR #{PullRequestId}",
                 request?.PullRequestId ?? 0);
 
+            // Set PR status to failed if we have the request
+            if (request != null)
+            {
+                try
+                {
+                    await _adoService.SetPullRequestStatusAsync(
+                        request.OrganizationUrl,
+                        request.ProjectId,
+                        request.RepositoryId,
+                        request.PullRequestId,
+                        "failed",
+                        "AI code review failed. See logs for details.",
+                        cancellationToken);
+                }
+                catch (Exception statusEx)
+                {
+                    _logger.LogWarning(statusEx, "Failed to set PR status to failed");
+                }
+            }
+
             // Let Service Bus handle retries
             throw;
         }
     }
 
-    private async Task ProcessReviewAsync(CodeReviewRequest request, CancellationToken cancellationToken)
+    private async Task<int> ProcessReviewAsync(CodeReviewRequest request, CancellationToken cancellationToken)
     {
         // ═══════════════════════════════════════════════════════════════
         // Step 1: Get PR iterations and changed files
@@ -109,7 +153,7 @@ public class CodeReviewProcessor
         if (iterations.Count == 0)
         {
             _logger.LogWarning("No iterations found for PR #{PullRequestId}", request.PullRequestId);
-            return;
+            return 0;
         }
 
         // Use the latest iteration
@@ -130,7 +174,7 @@ public class CodeReviewProcessor
         if (files.Count == 0)
         {
             _logger.LogInformation("No reviewable files found for PR #{PullRequestId}", request.PullRequestId);
-            return;
+            return 0;
         }
 
         _logger.LogInformation("Found {FileCount} reviewable files", files.Count);
@@ -141,7 +185,7 @@ public class CodeReviewProcessor
         if (filteredFiles.Count == 0)
         {
             _logger.LogInformation("All files filtered out for PR #{PullRequestId}", request.PullRequestId);
-            return;
+            return 0;
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -225,6 +269,8 @@ public class CodeReviewProcessor
 
         _logger.LogInformation("Posted {PostedCount} comments to PR #{PullRequestId}",
             postedCount, request.PullRequestId);
+
+        return postedCount;
     }
 
     private async Task<bool> PostCommentAsync(
