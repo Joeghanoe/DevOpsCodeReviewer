@@ -27,17 +27,6 @@ public class LlmOptions
     public string ApiKeySecretName { get; set; } = "foundry-api-key";
 
     /// <summary>
-    /// Maximum tokens for LLM response.
-    /// </summary>
-    public int MaxTokens { get; set; } = 4096;
-
-    /// <summary>
-    /// Temperature for LLM responses (0.0 - 1.0).
-    /// Lower values produce more deterministic outputs.
-    /// </summary>
-    public float Temperature { get; set; } = 0.3f;
-
-    /// <summary>
     /// Maximum files to include per LLM request.
     /// </summary>
     public int MaxFilesPerRequest { get; set; } = 10;
@@ -48,29 +37,9 @@ public class LlmOptions
     public int MaxLinesPerRequest { get; set; } = 2000;
 
     /// <summary>
-    /// Maximum retries for LLM API calls.
-    /// </summary>
-    public int MaxRetries { get; set; } = 3;
-
-    /// <summary>
-    /// Base delay in milliseconds between retries.
-    /// </summary>
-    public int RetryDelayMs { get; set; } = 1000;
-
-    /// <summary>
-    /// Request timeout in seconds.
-    /// </summary>
-    public int TimeoutSeconds { get; set; } = 120;
-
-    /// <summary>
     /// Directory containing prompt templates.
     /// </summary>
     public string PromptsDirectory { get; set; } = "prompts";
-
-    /// <summary>
-    /// Enable structured JSON output mode.
-    /// </summary>
-    public bool UseStructuredOutput { get; set; } = true;
 
     /// <summary>
     /// Minimum severity level to report (1-5).

@@ -9,7 +9,6 @@
     "ServiceBus__QueueName": "codereview-requests",
 
     "AzureDevOps__OrganizationUrl": "https://dev.azure.com/your-organization",
-    "AzureDevOps__Pat": "<your-pat-token-for-local-dev>",
     "AzureDevOps__PatSecretName": "ado-pat-token",
 
     "Llm__Endpoint": "https://your-openai.openai.azure.com/",

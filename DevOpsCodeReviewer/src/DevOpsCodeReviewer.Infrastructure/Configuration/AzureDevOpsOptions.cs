@@ -11,12 +11,6 @@ public class AzureDevOpsOptions
     public string OrganizationUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Personal Access Token for local development.
-    /// In production, use PatSecretName to retrieve from Key Vault.
-    /// </summary>
-    public string? Pat { get; set; }
-
-    /// <summary>
     /// Key Vault secret name containing the PAT token.
     /// </summary>
     public string PatSecretName { get; set; } = "ado-pat-token";
@@ -25,11 +19,6 @@ public class AzureDevOpsOptions
     /// API version to use for Azure DevOps REST API calls.
     /// </summary>
     public string ApiVersion { get; set; } = "7.1";
-
-    /// <summary>
-    /// Timeout in seconds for API requests.
-    /// </summary>
-    public int TimeoutSeconds { get; set; } = 30;
 
     /// <summary>
     /// Maximum number of files to include in a single review.

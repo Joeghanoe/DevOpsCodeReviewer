@@ -11,21 +11,12 @@ namespace DevOpsCodeReviewer.Infrastructure.Output;
 /// <summary>
 /// Outputs review comments to Azure DevOps pull request threads.
 /// </summary>
-public class AzureDevOpsOutputService : IReviewOutputService
+public class AzureDevOpsOutputService(
+    IAzureDevOpsService azureDevOpsService,
+    IOptions<AzureDevOpsOptions> options,
+    ILogger<AzureDevOpsOutputService> logger) : IReviewOutputService
 {
-    private readonly IAzureDevOpsService _azureDevOpsService;
-    private readonly AzureDevOpsOptions _options;
-    private readonly ILogger<AzureDevOpsOutputService> _logger;
-
-    public AzureDevOpsOutputService(
-        IAzureDevOpsService azureDevOpsService,
-        IOptions<AzureDevOpsOptions> options,
-        ILogger<AzureDevOpsOutputService> logger)
-    {
-        _azureDevOpsService = azureDevOpsService;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly AzureDevOpsOptions _options = options.Value;
 
     public async Task<bool> PublishOverviewAsync(CodeReviewRequest request, ReviewOverview overview, CancellationToken ct)
     {
@@ -47,7 +38,7 @@ public class AzureDevOpsOutputService : IReviewOutputService
                 Status = "closed" // Overview is informational, mark as closed
             };
 
-            var result = await _azureDevOpsService.CreateCommentThreadAsync(
+            var result = await azureDevOpsService.CreateCommentThreadAsync(
                 request.OrganizationUrl,
                 request.ProjectId,
                 request.RepositoryId,
@@ -57,16 +48,16 @@ public class AzureDevOpsOutputService : IReviewOutputService
 
             if (result != null)
             {
-                _logger.LogInformation("Posted review overview to PR #{PullRequestId}", request.PullRequestId);
+                logger.LogInformation("Posted review overview to PR #{PullRequestId}", request.PullRequestId);
                 return true;
             }
 
-            _logger.LogWarning("Failed to post review overview to PR #{PullRequestId}", request.PullRequestId);
+            logger.LogWarning("Failed to post review overview to PR #{PullRequestId}", request.PullRequestId);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error posting review overview to PR #{PullRequestId}", request.PullRequestId);
+            logger.LogError(ex, "Error posting review overview to PR #{PullRequestId}", request.PullRequestId);
             return false;
         }
     }
@@ -102,7 +93,7 @@ public class AzureDevOpsOutputService : IReviewOutputService
                 }
             };
 
-            var result = await _azureDevOpsService.CreateCommentThreadAsync(
+            var result = await azureDevOpsService.CreateCommentThreadAsync(
                 request.OrganizationUrl,
                 request.ProjectId,
                 request.RepositoryId,
@@ -112,18 +103,18 @@ public class AzureDevOpsOutputService : IReviewOutputService
 
             if (result != null)
             {
-                _logger.LogDebug("Created comment thread {ThreadId} on {FilePath}:{Line}",
+                logger.LogDebug("Created comment thread {ThreadId} on {FilePath}:{Line}",
                     result.Id, comment.FilePath, comment.LineNumber);
                 return true;
             }
 
-            _logger.LogWarning("Failed to create comment thread on {FilePath}:{Line}",
+            logger.LogWarning("Failed to create comment thread on {FilePath}:{Line}",
                 comment.FilePath, comment.LineNumber);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating comment thread on {FilePath}:{Line}",
+            logger.LogError(ex, "Error creating comment thread on {FilePath}:{Line}",
                 comment.FilePath, comment.LineNumber);
             return false;
         }
@@ -131,7 +122,7 @@ public class AzureDevOpsOutputService : IReviewOutputService
 
     public Task FinalizeReviewAsync(CodeReviewRequest request, int totalComments, CancellationToken ct)
     {
-        _logger.LogInformation("Published {CommentCount} comments to PR #{PullRequestId}",
+        logger.LogInformation("Published {CommentCount} comments to PR #{PullRequestId}",
             totalComments, request.PullRequestId);
 
         return Task.CompletedTask;
@@ -189,7 +180,7 @@ public class AzureDevOpsOutputService : IReviewOutputService
         }
 
         // Confidence and Risk Assessment
-        sb.AppendLine($"### Assessment");
+        sb.AppendLine("### Assessment");
         sb.AppendLine();
         sb.AppendLine($"**Confidence Score**: {overview.ConfidenceScore}/5");
         if (!string.IsNullOrEmpty(overview.ConfidenceRationale))

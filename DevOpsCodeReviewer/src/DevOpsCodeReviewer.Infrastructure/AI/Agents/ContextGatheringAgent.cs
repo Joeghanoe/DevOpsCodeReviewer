@@ -102,11 +102,15 @@ public class ContextGatheringAgent(
 
                 // Try to determine the actual file path
                 var possiblePaths = GetPossibleFilePaths(importPath, sourcePath);
+                var found = false;
 
                 foreach (var possiblePath in possiblePaths)
                 {
                     if (fetchedPaths.Contains(possiblePath))
-                        continue;
+                    {
+                        found = true;
+                        break;
+                    }
 
                     var content = await _azureDevOpsService.GetFileContentAsync(
                         input.Context.OrganizationUrl,
@@ -118,6 +122,7 @@ public class ContextGatheringAgent(
 
                     if (content != null)
                     {
+                        found = true;
                         fetchedPaths.Add(possiblePath);
                         relatedFiles.Add(new RelatedFile
                         {
@@ -136,6 +141,13 @@ public class ContextGatheringAgent(
 
                         break; // Found the file, no need to try other paths
                     }
+                }
+
+                // Only log warning if none of the possible paths were found
+                if (!found && possiblePaths.Count > 0)
+                {
+                    _logger.LogDebug("Could not resolve import '{Import}' from {Source} (tried {Count} extensions)",
+                        importPath, sourcePath, possiblePaths.Count);
                 }
             }
         }

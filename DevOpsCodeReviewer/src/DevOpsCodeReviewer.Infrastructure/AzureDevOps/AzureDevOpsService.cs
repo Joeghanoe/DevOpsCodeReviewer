@@ -14,50 +14,31 @@ namespace DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 /// <summary>
 /// Service for Azure DevOps REST API operations.
 /// </summary>
-public class AzureDevOpsService : IAzureDevOpsService
+public class AzureDevOpsService(
+    HttpClient httpClient,
+    IOptions<AzureDevOpsOptions> options,
+    IDiffService diffService,
+    ILogger<AzureDevOpsService> logger,
+    SecretClient? secretClient = null)
+    : IAzureDevOpsService
 {
-    private readonly HttpClient _httpClient;
-    private readonly AzureDevOpsOptions _options;
-    private readonly SecretClient? _secretClient;
-    private readonly IDiffService _diffService;
-    private readonly ILogger<AzureDevOpsService> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
-    private string? _cachedPat;
+    private readonly AzureDevOpsOptions _options = options.Value;
 
-    public AzureDevOpsService(
-        HttpClient httpClient,
-        IOptions<AzureDevOpsOptions> options,
-        IDiffService diffService,
-        ILogger<AzureDevOpsService> logger,
-        SecretClient? secretClient = null)
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        _httpClient = httpClient;
-        _options = options.Value;
-        _diffService = diffService;
-        _secretClient = secretClient;
-        _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-    }
+        PropertyNameCaseInsensitive = true
+    };
+    private string? _cachedPat;
 
     private async Task<string> GetPatAsync(CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(_cachedPat))
             return _cachedPat;
 
-        // Try direct configuration first (local development)
-        if (!string.IsNullOrEmpty(_options.Pat))
-        {
-            _cachedPat = _options.Pat;
-            return _cachedPat;
-        }
-
         // Try Key Vault
-        if (_secretClient != null && !string.IsNullOrEmpty(_options.PatSecretName))
+        if (secretClient != null && !string.IsNullOrEmpty(_options.PatSecretName))
         {
-            var secret = await _secretClient.GetSecretAsync(_options.PatSecretName, cancellationToken: cancellationToken);
+            var secret = await secretClient.GetSecretAsync(_options.PatSecretName, cancellationToken: cancellationToken);
             _cachedPat = secret.Value.Value;
             return _cachedPat;
         }
@@ -92,14 +73,14 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}");
 
-        _logger.LogDebug("Getting pull request {PullRequestId} from {Url}", pullRequestId, url);
+        logger.LogDebug("Getting pull request {PullRequestId} from {Url}", pullRequestId, url);
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to get pull request: {StatusCode}", response.StatusCode);
+            logger.LogError("Failed to get pull request: {StatusCode}", response.StatusCode);
             return null;
         }
 
@@ -116,14 +97,14 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/iterations");
 
-        _logger.LogDebug("Getting iterations for PR {PullRequestId}", pullRequestId);
+        logger.LogDebug("Getting iterations for PR {PullRequestId}", pullRequestId);
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to get iterations: {StatusCode}", response.StatusCode);
+            logger.LogError("Failed to get iterations: {StatusCode}", response.StatusCode);
             return [];
         }
 
@@ -142,14 +123,14 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/iterations/{iterationId}/changes");
 
-        _logger.LogDebug("Getting changes for iteration {IterationId}", iterationId);
+        logger.LogDebug("Getting changes for iteration {IterationId}", iterationId);
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to get iteration changes: {StatusCode}", response.StatusCode);
+            logger.LogError("Failed to get iteration changes: {StatusCode}", response.StatusCode);
             return [];
         }
 
@@ -174,19 +155,28 @@ public class AzureDevOpsService : IAzureDevOpsService
             url += $"&versionDescriptor.version={commitId}&versionDescriptor.versionType=commit";
         }
 
-        _logger.LogDebug("Getting file content: {Path} at commit {CommitId}", path, commitId ?? "latest");
+        logger.LogDebug("Getting file content: {Path} at commit {CommitId}", path, commitId ?? "latest");
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Failed to get file content for {Path}: {StatusCode}", path, response.StatusCode);
+            // NotFound is expected when probing file extensions - log as Debug
+            // Other errors (401, 500, etc.) are unexpected - log as Warning
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                logger.LogDebug("File not found: {Path}", path);
+            }
+            else
+            {
+                logger.LogWarning("Failed to get file content for {Path}: {StatusCode}", path, response.StatusCode);
+            }
             return null;
         }
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogDebug("Retrieved {Length} characters for {Path}", content.Length, path);
+        logger.LogDebug("Retrieved {Length} characters for {Path}", content.Length, path);
 
         return content;
     }
@@ -200,14 +190,14 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/threads");
 
-        _logger.LogDebug("Getting threads for PR {PullRequestId}", pullRequestId);
+        logger.LogDebug("Getting threads for PR {PullRequestId}", pullRequestId);
 
         var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
-        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to get threads: {StatusCode}", response.StatusCode);
+            logger.LogError("Failed to get threads: {StatusCode}", response.StatusCode);
             return [];
         }
 
@@ -226,7 +216,7 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/threads");
 
-        _logger.LogDebug("Creating comment thread on PR {PullRequestId}", pullRequestId);
+        logger.LogDebug("Creating comment thread on PR {PullRequestId}", pullRequestId);
 
         var httpRequest = await CreateRequestAsync(HttpMethod.Post, url, cancellationToken);
         httpRequest.Content = new StringContent(
@@ -234,12 +224,12 @@ public class AzureDevOpsService : IAzureDevOpsService
             Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var response = await httpClient.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Failed to create thread: {StatusCode} - {Error}", response.StatusCode, errorContent);
+            logger.LogError("Failed to create thread: {StatusCode} - {Error}", response.StatusCode, errorContent);
             return null;
         }
 
@@ -277,7 +267,7 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Skip if not a reviewable file
             if (!IsReviewableFile(path))
             {
-                _logger.LogDebug("Skipping non-reviewable file: {Path}", path);
+                logger.LogDebug("Skipping non-reviewable file: {Path}", path);
                 continue;
             }
 
@@ -291,7 +281,7 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Check file size
             if (content.Length > _options.MaxFileSizeBytes)
             {
-                _logger.LogDebug("Skipping large file: {Path} ({Size} bytes)", path, content.Length);
+                logger.LogDebug("Skipping large file: {Path} ({Size} bytes)", path, content.Length);
                 continue;
             }
 
@@ -305,7 +295,7 @@ public class AzureDevOpsService : IAzureDevOpsService
             }
 
             // Compute diff
-            var diffHunks = _diffService.ComputeDiff(originalContent, content);
+            var diffHunks = diffService.ComputeDiff(originalContent, content);
 
             fileContents.Add(new FileContent
             {
@@ -322,7 +312,7 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Limit number of files
             if (fileContents.Count >= _options.MaxFilesPerReview)
             {
-                _logger.LogWarning("Reached max files limit ({Max}), skipping remaining files", _options.MaxFilesPerReview);
+                logger.LogWarning("Reached max files limit ({Max}), skipping remaining files", _options.MaxFilesPerReview);
                 break;
             }
         }
@@ -335,7 +325,7 @@ public class AzureDevOpsService : IAzureDevOpsService
         // Check excluded patterns
         foreach (var pattern in _options.ExcludedPatterns)
         {
-            if (pattern.StartsWith("*"))
+            if (pattern.StartsWith('*'))
             {
                 if (path.EndsWith(pattern.TrimStart('*'), StringComparison.OrdinalIgnoreCase))
                     return false;
@@ -363,7 +353,7 @@ public class AzureDevOpsService : IAzureDevOpsService
     {
         var url = BuildUrl(organizationUrl, $"{projectId}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/statuses");
 
-        _logger.LogDebug("Setting PR status for PR {PullRequestId}: {State} - {Description}",
+        logger.LogDebug("Setting PR status for PR {PullRequestId}: {State} - {Description}",
             pullRequestId, state, description);
 
         var statusRequest = new CreatePullRequestStatusRequest
@@ -383,12 +373,12 @@ public class AzureDevOpsService : IAzureDevOpsService
             Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var response = await httpClient.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Failed to set PR status: {StatusCode} - {Error}", response.StatusCode, errorContent);
+            logger.LogError("Failed to set PR status: {StatusCode} - {Error}", response.StatusCode, errorContent);
             return null;
         }
 

@@ -26,19 +26,3 @@ public class WebhookOptions
     /// </summary>
     public string Secret { get; set; } = string.Empty;
 }
-
-/// <summary>
-/// Configuration options for review output.
-/// </summary>
-public class ReviewOutputOptions
-{
-    /// <summary>
-    /// Output directory for local file output.
-    /// </summary>
-    public string OutputDirectory { get; set; } = "Reviews";
-
-    /// <summary>
-    /// Whether to log output to console.
-    /// </summary>
-    public bool LogToConsole { get; set; } = true;
-}

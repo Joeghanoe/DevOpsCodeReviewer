@@ -56,7 +56,7 @@ Dependencies flow outward: Functions → Infrastructure → Core. Core has zero 
 
 ### Output Services
 
-In DEBUG builds, `LocalFileOutputService` writes reviews to local files in `Reviews/`. In RELEASE builds, `AzureDevOpsOutputService` posts comments directly to the PR.
+`AzureDevOpsOutputService` posts comments directly to the PR.
 
 ### Configuration Sections
 
@@ -65,7 +65,6 @@ Configuration is bound via `IOptions<T>` pattern:
 - `Llm` - Azure OpenAI endpoint, deployment name, token limits, temperature
 - `ServiceBus` - Connection string and queue name
 - `Webhook` - Secret for webhook validation
-- `ReviewOutput` - Output configuration
 - `KeyVault` - Vault URL for secret resolution
 
 Secrets can be provided directly in config (local dev) or via Key Vault secret names (production).

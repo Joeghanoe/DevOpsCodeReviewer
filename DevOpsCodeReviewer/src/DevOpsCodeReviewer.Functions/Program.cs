@@ -9,7 +9,6 @@ using DevOpsCodeReviewer.Infrastructure.AzureDevOps;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
 using DevOpsCodeReviewer.Infrastructure.Output;
 using DevOpsCodeReviewer.Infrastructure.Workflows;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,10 +20,7 @@ using Polly.Extensions.Http;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
-    .ConfigureAppConfiguration((context, config) =>
-    {
-        config.AddEnvironmentVariables();
-    })
+    .ConfigureAppConfiguration((_, config) => { config.AddEnvironmentVariables(); })
     .ConfigureServices((context, services) =>
     {
         var configuration = context.Configuration;
@@ -36,7 +32,6 @@ var host = new HostBuilder()
         services.Configure<LlmOptions>(configuration.GetSection("Llm"));
         services.Configure<ServiceBusOptions>(configuration.GetSection("ServiceBus"));
         services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));
-        services.Configure<ReviewOutputOptions>(configuration.GetSection("ReviewOutput"));
 
         // Map AzureDevOpsOptions to CodeAnalysisOptions for Core services
         services.Configure<CodeAnalysisOptions>(opt =>
@@ -64,7 +59,7 @@ var host = new HostBuilder()
         var keyVaultUrl = configuration["KeyVault:VaultUrl"];
         if (!string.IsNullOrEmpty(keyVaultUrl))
         {
-            services.AddSingleton(sp =>
+            services.AddSingleton(_ =>
             {
                 var credential = new DefaultAzureCredential();
                 return new SecretClient(new Uri(keyVaultUrl), credential);
@@ -81,11 +76,11 @@ var host = new HostBuilder()
         // Infrastructure - Azure DevOps
         // ═══════════════════════════════════════════════════════════════
         services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>(client =>
-        {
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-            client.Timeout = TimeSpan.FromSeconds(30);
-        })
-        .AddPolicyHandler(GetRetryPolicy());
+            {
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddPolicyHandler(GetRetryPolicy());
 
         // ═══════════════════════════════════════════════════════════════
         // Infrastructure - Microsoft Agent Framework & AI
@@ -93,7 +88,7 @@ var host = new HostBuilder()
         services.AddSingleton<IChatClient>(sp =>
         {
             var llmOptions = configuration.GetSection("Llm").Get<LlmOptions>()
-                ?? throw new InvalidOperationException("LLM configuration is required");
+                             ?? throw new InvalidOperationException("LLM configuration is required");
 
             // Get API key (direct or from KeyVault)
             var apiKey = llmOptions.ApiKey;
@@ -112,11 +107,11 @@ var host = new HostBuilder()
                 throw new InvalidOperationException("No API key configured. Set Llm:ApiKey or configure Key Vault.");
             }
 
-            var azureOpenAIClient = new AzureOpenAIClient(
+            var azureOpenAiClient = new AzureOpenAIClient(
                 new Uri(llmOptions.Endpoint),
                 new System.ClientModel.ApiKeyCredential(apiKey));
 
-            ChatClient chatClient = azureOpenAIClient.GetChatClient(llmOptions.DeploymentName);
+            ChatClient chatClient = azureOpenAiClient.GetChatClient(llmOptions.DeploymentName);
             return chatClient.AsIChatClient();
         });
 
@@ -131,11 +126,7 @@ var host = new HostBuilder()
         // ═══════════════════════════════════════════════════════════════
         // Output Services
         // ═══════════════════════════════════════════════════════════════
-#if DEBUG
-        services.AddSingleton<IReviewOutputService, LocalFileOutputService>();
-#else
         services.AddSingleton<IReviewOutputService, AzureDevOpsOutputService>();
-#endif
 
         // ═══════════════════════════════════════════════════════════════
         // Telemetry
@@ -166,9 +157,5 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         .WaitAndRetryAsync(
             retryCount: 3,
             sleepDurationProvider: retryAttempt =>
-                TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (outcome, timespan, retryAttempt, context) =>
-            {
-                // Logging handled by Polly's built-in logging
-            });
+                TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 }
