@@ -54,12 +54,6 @@ public class CodeReviewAgent(
                 response.FilesReviewed += chunkResponse.FilesReviewed;
                 response.LinesReviewed += chunkResponse.LinesReviewed;
 
-                // Capture overview from first chunk (contains full PR context)
-                if (response.Overview == null && chunkResponse.Overview != null)
-                {
-                    response.Overview = chunkResponse.Overview;
-                }
-
                 if (chunkResponse.TokenUsage != null)
                 {
                     response.TokenUsage ??= new TokenUsage();
@@ -222,31 +216,6 @@ public class CodeReviewAgent(
             // Extract text from response and deserialize
             var responseText = agentResponse.AsChatResponse().Text;
             var parsed = JsonSerializer.Deserialize<CodeReviewLlmResponse>(responseText, JsonSerializerOptions.Web);
-
-            // Map overview if present
-            if (parsed?.Overview != null)
-            {
-                response.Overview = new ReviewOverview
-                {
-                    Summary = parsed.Overview.Summary ?? "",
-                    ConfidenceScore = parsed.Overview.ConfidenceScore ?? 3,
-                    ConfidenceRationale = parsed.Overview.ConfidenceRationale,
-                    RiskAssessment = parsed.Overview.RiskAssessment ?? "low-risk",
-                    KeyChanges = parsed.Overview.KeyChanges?
-                        .Select(k => new KeyChange
-                        {
-                            Description = k.Description ?? "",
-                            Rationale = k.Rationale
-                        }).ToList() ?? [],
-                    ImportantFiles = parsed.Overview.ImportantFiles?
-                        .Select(f => new ImportantFile
-                        {
-                            FilePath = f.FilePath ?? "",
-                            Score = f.Score ?? 3,
-                            Description = f.Description
-                        }).ToList() ?? []
-                };
-            }
 
             if (parsed?.Comments != null)
             {

@@ -21,4 +21,9 @@ public interface IAgentFactory
     /// Creates the Code Review Agent.
     /// </summary>
     ICodeReviewAgent CreateCodeReviewAgent();
+
+    /// <summary>
+    /// Creates the Overview Agent.
+    /// </summary>
+    IOverviewAgent CreateOverviewAgent();
 }

@@ -28,6 +28,11 @@ public interface IPromptService
     /// Gets the code review prompt.
     /// </summary>
     string GetCodeReviewPrompt();
+
+    /// <summary>
+    /// Gets the overview generation prompt.
+    /// </summary>
+    string GetOverviewPrompt();
 }
 
 /// <summary>
@@ -229,6 +234,11 @@ public class PromptService : IPromptService
             - suggestedCode: Code snippet for the fix (optional)
             - relatedCodeReference: Reference to related existing code (optional)
             """;
+    }
+
+    public string GetOverviewPrompt()
+    {
+        return LoadPromptFile("overview-generation.md");
     }
 
     private string LoadPromptFile(string fileName)

@@ -193,23 +193,9 @@ Only include comments that survived ALL steps.
 
 ## Response Format
 
-Respond with a JSON object containing:
+Respond with a JSON object containing an array of code review comments.
 
-### CRITICAL SCORING CONSTRAINT
-All scores (`score` and `confidenceScore`) MUST be integers between 1 and 5 inclusive. Values like 6, 7, 8, 9, 10 are INVALID. If you feel something deserves a "10", use 5 instead - that's the maximum.
-
-### Overview Section (Required)
-Provide a high-level summary of the PR changes:
-
-- `overview.summary`: A 2-4 sentence executive summary of what the PR accomplishes and your overall assessment
-- `overview.keyChanges`: Array of key changes, each with `description` (what changed) and `rationale` (why it matters)
-- `overview.importantFiles`: Array of files with significant changes, each with:
-  - `filePath`: Path to the file
-  - `score`: Impact score from 1 to 5 ONLY (integer, minimum 1, maximum 5). Use: 1=minimal impact, 2=low impact, 3=moderate impact, 4=high impact, 5=critical impact. NEVER use values above 5.
-  - `description`: Brief description of changes in this file
-- `overview.confidenceScore`: Your confidence in the review, integer from 1 to 5 ONLY (1=very uncertain, 2=somewhat uncertain, 3=moderately confident, 4=confident, 5=highly confident). NEVER use values above 5.
-- `overview.confidenceRationale`: Brief explanation of your confidence score
-- `overview.riskAssessment`: "safe" | "low-risk" | "medium-risk" | "high-risk" | "critical-risk"
+**Note:** Overview generation (summary, risk assessment, confidence scores) is handled by a separate agent. Focus only on generating detailed code review comments.
 
 ### Comments Section
 An array of specific code comments. Each comment must have:
@@ -238,25 +224,6 @@ Example response (note: lineNumber 12 matches `L 12` from the diff):
 
 ```json
 {
-  "overview": {
-    "summary": "This PR adds user lookup functionality but introduces a critical SQL injection vulnerability. The change accomplishes its goal but requires security fixes before merge.",
-    "keyChanges": [
-      {
-        "description": "Added database query to fetch user by ID",
-        "rationale": "Enables user profile lookup feature, but implementation is insecure"
-      }
-    ],
-    "importantFiles": [
-      {
-        "filePath": "src/example.ts",
-        "score": 4,
-        "description": "Contains SQL injection vulnerability in user query - requires immediate fix"
-      }
-    ],
-    "confidenceScore": 4,
-    "confidenceRationale": "Clear security vulnerability with well-understood fix pattern",
-    "riskAssessment": "critical-risk"
-  },
   "comments": [
     {
       "filePath": "src/example.ts",
@@ -280,3 +247,14 @@ If there are no issues to report, return an empty comments array:
   "comments": []
 }
 ```
+
+## FINAL OUTPUT CHECKLIST (Complete Before Responding)
+
+Before you output your JSON response, verify each item:
+
+- [ ] Every `severity` is exactly one of: "Info", "Minor", "Major", "Critical", "Blocker"
+- [ ] Every `category` is from the valid list
+- [ ] Every `lineNumber` matches a line from the diff (L### format)
+- [ ] Every comment has a concrete `impactExample`
+
+**Focus on quality over quantity: 3 verified, high-confidence comments are infinitely better than 10 questionable ones.**

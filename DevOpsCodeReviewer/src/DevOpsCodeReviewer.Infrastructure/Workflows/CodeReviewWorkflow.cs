@@ -46,6 +46,7 @@ public class CodeReviewWorkflow : ICodeReviewWorkflow
             var contextAgent = _agentFactory.CreateContextGatheringAgent();
             var analyzerAgent = _agentFactory.CreateDiffAnalyzerAgent();
             var reviewAgent = _agentFactory.CreateCodeReviewAgent();
+            var overviewAgent = _agentFactory.CreateOverviewAgent();
 
             // ═══════════════════════════════════════════════════════════════
             // STEP 1: Context Gathering
@@ -108,16 +109,42 @@ public class CodeReviewWorkflow : ICodeReviewWorkflow
                 reviewResult.Comments.Count);
 
             // ═══════════════════════════════════════════════════════════════
+            // STEP 4: Overview Generation
+            // ═══════════════════════════════════════════════════════════════
+            _logger.LogInformation("[Workflow] Step 4: Overview Generation");
+            var overviewStopwatch = Stopwatch.StartNew();
+
+            var overviewInput = new OverviewInput
+            {
+                Analysis = analysisResult,
+                Comments = reviewResult.Comments,
+                Request = request,
+                ExecutionContext = executionContext
+            };
+
+            var overviewResult = await overviewAgent.ExecuteAsync(overviewInput, cancellationToken);
+            overviewStopwatch.Stop();
+
+            _logger.LogInformation("[Workflow] Overview generation completed in {ElapsedMs}ms. Risk: {Risk}, Confidence: {Confidence}/5",
+                overviewStopwatch.ElapsedMilliseconds,
+                overviewResult.RiskAssessment,
+                overviewResult.ConfidenceScore);
+
+            // Attach overview to review result
+            reviewResult.Overview = overviewResult;
+
+            // ═══════════════════════════════════════════════════════════════
             // COMPLETE
             // ═══════════════════════════════════════════════════════════════
             workflowStopwatch.Stop();
 
             _logger.LogInformation(
-                "[Workflow] Pipeline completed in {TotalMs}ms (Context: {ContextMs}ms, Analysis: {AnalysisMs}ms, Review: {ReviewMs}ms). Total comments: {CommentCount}",
+                "[Workflow] Pipeline completed in {TotalMs}ms (Context: {ContextMs}ms, Analysis: {AnalysisMs}ms, Review: {ReviewMs}ms, Overview: {OverviewMs}ms). Total comments: {CommentCount}",
                 workflowStopwatch.ElapsedMilliseconds,
                 contextStopwatch.ElapsedMilliseconds,
                 analysisStopwatch.ElapsedMilliseconds,
                 reviewStopwatch.ElapsedMilliseconds,
+                overviewStopwatch.ElapsedMilliseconds,
                 reviewResult.Comments.Count);
 
             return reviewResult;

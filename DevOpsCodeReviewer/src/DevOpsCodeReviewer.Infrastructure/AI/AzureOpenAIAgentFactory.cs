@@ -94,4 +94,24 @@ public class AzureOpenAIAgentFactory(
             _options,
             _loggerFactory.CreateLogger<CodeReviewAgent>());
     }
+
+    public IOverviewAgent CreateOverviewAgent()
+    {
+        var chatOptions = new Microsoft.Extensions.AI.ChatOptions
+        {
+            Instructions = _promptService.GetOverviewPrompt(),
+            ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<OverviewLlmResponse>(
+                schemaDescription: "PR overview with risk assessment and confidence scores")
+        };
+
+        var agent = _chatClient.CreateAIAgent(new ChatClientAgentOptions
+        {
+            Name = "OverviewAgent",
+            ChatOptions = chatOptions
+        });
+
+        return new OverviewAgent(
+            agent,
+            _loggerFactory.CreateLogger<OverviewAgent>());
+    }
 }

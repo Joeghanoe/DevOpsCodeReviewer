@@ -3,14 +3,10 @@ namespace DevOpsCodeReviewer.Infrastructure.AI.Models;
 /// <summary>
 /// Response schema for CodeReviewAgent structured output.
 /// Named with "Llm" suffix to avoid collision with DevOpsCodeReviewer.Core.Models.CodeReviewResponse
+/// Note: Overview generation is handled by a separate OverviewAgent.
 /// </summary>
 public class CodeReviewLlmResponse
 {
-    /// <summary>
-    /// High-level overview of the PR changes.
-    /// </summary>
-    public ReviewOverviewInfo? Overview { get; set; }
-    
     public List<ReviewCommentInfo>? Comments { get; set; }
 }
 
