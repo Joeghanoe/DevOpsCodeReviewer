@@ -2,6 +2,13 @@
 
 This guide explains how to customize the AI code reviewer for your team's needs.
 
+## Overview
+
+The review behavior is controlled through:
+1. **Language-specific prompts** - Define review focus for each programming language
+2. **Principles** - Configurable rules for architecture, cloud, and security compliance
+3. **Configuration settings** - Tune severity thresholds, file filtering, and more
+
 ## Customizing Review Prompts
 
 The AI's behavior is primarily controlled through prompts in the `prompts/` directory.
@@ -135,6 +142,90 @@ In `appsettings` or environment:
 }
 ```
 
+## Customizing Review Principles
+
+The reviewer applies configurable principles during code review. These are defined in `prompts/principles/` and enforce architectural, cloud, and security standards.
+
+### Built-in Principles
+
+| Principle File | Category | What It Checks |
+|----------------|----------|----------------|
+| `architectural-principles.md` | Architecture | Service independence, API versioning, async/await patterns, single responsibility |
+| `cloud-principles.md` | CloudCompliance | No PII in logs, stateless services, DRY, testability, immutability |
+| `security-principles.md` | Security | Least privilege, secure defaults, fail securely, defense in depth |
+
+### Modifying Existing Principles
+
+Edit the principle files in `prompts/principles/` to adjust:
+
+1. **Detection patterns** - What code patterns to flag
+2. **Severity levels** - How severe a violation is (Info, Minor, Major, Critical, Blocker)
+3. **Examples** - Bad/good code examples that guide the AI
+
+Example: Make unversioned APIs a blocker instead of critical:
+
+```markdown
+## A.9: Interface Versioning
+
+**Detect:**
+- API routes without version prefix
+- Controllers without `[ApiVersion]` attribute
+
+**Severity:** Blocker  <!-- Changed from Critical -->
+```
+
+### Creating Custom Principles
+
+Create a new file in `prompts/principles/` following this template:
+
+```markdown
+# Your Company Principles
+
+## Principle: Logging Standard
+
+All service methods must include structured logging.
+
+**Detect:**
+- Public service methods without logging statements
+- Logging without correlation ID
+- Using string interpolation instead of structured logging
+
+**Severity:** Major
+**Impact Example:** "Without structured logging, debugging production issues becomes nearly impossible."
+
+```csharp
+// BAD: No logging or unstructured
+public async Task<Order> ProcessOrderAsync(int orderId)
+{
+    Console.WriteLine($"Processing order {orderId}");  // Bad
+    return await _repository.GetOrderAsync(orderId);
+}
+
+// GOOD: Structured logging with correlation
+public async Task<Order> ProcessOrderAsync(int orderId)
+{
+    _logger.LogInformation("Processing order {OrderId}", orderId);
+    var order = await _repository.GetOrderAsync(orderId);
+    _logger.LogInformation("Order {OrderId} processed successfully", orderId);
+    return order;
+}
+```
+```
+
+### Disabling Principles
+
+To disable a principle category entirely, remove or rename the corresponding file in `prompts/principles/`.
+
+To disable specific rules within a principle, comment them out or remove them from the markdown file.
+
+### Principle Categories in Comments
+
+Violations appear in PR comments with these categories:
+- **Architecture** - From `architectural-principles.md`
+- **CloudCompliance** - From `cloud-principles.md`
+- **Security** - From `security-principles.md`
+- **Bug, Performance, Style** - From language-specific prompts
+
 ## Customizing Review Behavior
 
 ### Adjust Severity Threshold
@@ -207,6 +298,51 @@ var vote = hasBlockers ? -10 :  // Reject
            0;  // No vote
 
 await _adoService.SetReviewerVoteAsync(request, vote, cancellationToken);
+```
+
+### Customizing Overview Output
+
+The Overview Agent generates an executive summary. You can customize what's included by modifying `prompts/overview-generation.md`.
+
+**Available Fields:**
+- `summary` - 2-4 sentence executive summary
+- `keyChanges` - List of significant changes with rationale
+- `importantFiles` - Files ranked by impact score (1-5)
+- `confidenceScore` - Review confidence (1-5)
+- `riskAssessment` - Risk level: `safe`, `low-risk`, `medium-risk`, `high-risk`, `critical-risk`
+
+**Customizing Risk Assessment Logic:**
+
+Modify the risk derivation in `OverviewAgent.cs`:
+
+```csharp
+private static string DeriveRiskFromComments(List<ReviewComment> comments)
+{
+    // Add your custom logic here
+    if (comments.Any(c => c.Category == ReviewCategory.Security))
+        return "high-risk";  // Security issues always high risk
+
+    // Default logic
+    if (comments.Count == 0) return "safe";
+    var maxSeverity = comments.Max(c => (int)c.Severity);
+    // ...
+}
+```
+
+**Customizing Important Files Selection:**
+
+The Overview Agent scores files by impact. Modify the prompt to change scoring criteria:
+
+```markdown
+## Score Guidance (in prompts/overview-generation.md)
+
+| Score | Meaning |
+|-------|---------|
+| 1 | Trivial change (whitespace, comments) |
+| 2 | Minor change (small refactor) |
+| 3 | Moderate change (new functionality) |
+| 4 | Significant change (core logic) |
+| 5 | Critical change (security, data model) |
 ```
 
 ### Filtering by File Path

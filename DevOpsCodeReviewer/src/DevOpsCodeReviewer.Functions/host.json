@@ -20,8 +20,7 @@
       "prefetchCount": 1,
       "messageHandlerOptions": {
         "autoComplete": false,
-        "maxConcurrentCalls": 2,
-        "maxAutoLockRenewalDuration": "00:10:00"
+        "maxConcurrentCalls": 2
       },
       "batchOptions": {
         "maxMessageCount": 1,

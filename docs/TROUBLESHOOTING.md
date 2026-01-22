@@ -117,6 +117,54 @@ az keyvault secret set \
 **Error: "Invalid deployment name"**
 - Verify `Llm__DeploymentName` matches your Azure OpenAI deployment
 
+### Agent Pipeline Errors
+
+**Symptoms**: Partial review, missing overview, or incomplete comments.
+
+**Overview not appearing on PR**
+
+1. Check logs for Overview Agent errors:
+   ```kusto
+   traces
+   | where message contains "[OverviewAgent]"
+   | order by timestamp desc
+   | take 20
+   ```
+
+2. If you see "Generating fallback overview":
+   - The Overview Agent encountered an error and generated a basic summary
+   - Check the preceding error logs for root cause
+
+**Risk assessment always showing "safe"**
+
+1. Verify comments are being generated (check `[CodeReviewAgent]` logs)
+2. If comments are filtered by severity threshold, risk may appear lower
+3. Lower `Llm__MinSeverityLevel` to include more comments
+
+**Agent timeouts**
+
+If agents are timing out on large PRs:
+```json
+{
+  "Llm": {
+    "TimeoutSeconds": 180,
+    "MaxFilesPerRequest": 8,
+    "MaxLinesPerRequest": 1500
+  }
+}
+```
+
+**Diagnostic Query - Pipeline Timing**:
+```kusto
+traces
+| where message contains "[Workflow]"
+| where message contains "completed in"
+| order by timestamp desc
+| take 10
+```
+
+This shows execution time for each agent and the total pipeline.
+
 ### Service Bus Errors
 
 **Symptoms**: Messages not processing, dead letters accumulating.
@@ -149,6 +197,33 @@ Required scopes:
 # Should be https://dev.azure.com/your-org (no trailing slash)
 echo $AzureDevOps__OrganizationUrl
 ```
+
+### Principles Not Being Applied
+
+**Symptoms**: Architecture, Cloud, or Security violations not being flagged.
+
+1. Verify principle files exist in `prompts/principles/`:
+   ```bash
+   ls prompts/principles/
+   # Should show: architectural-principles.md, cloud-principles.md, security-principles.md
+   ```
+
+2. Check that principles are being loaded (in logs):
+   ```kusto
+   traces
+   | where message contains "PromptService" or message contains "principles"
+   | order by timestamp desc
+   ```
+
+3. Verify the Code Review Agent is using the principles:
+   - Check that the prompt includes principle content
+   - Ensure the principle file syntax is valid markdown
+
+**Principles flagging too many/few issues**
+
+- Adjust severity levels in the principle files
+- Raise `Llm__MinSeverityLevel` to filter out lower-severity principles
+- Modify detection patterns in the principle markdown files
 
 ## Debug Mode
 

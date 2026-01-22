@@ -1,6 +1,6 @@
 # Azure DevOps AI Code Reviewer
 
-An open-source, production-ready Azure DevOps Pull Request code review bot powered by Azure OpenAI.
+An open-source, production-ready Azure DevOps Pull Request code review bot powered by Azure OpenAI. Uses a **multi-agent AI pipeline** to provide intelligent, context-aware code reviews with risk assessment and executive summaries.
 
 ## Architecture
 
@@ -14,19 +14,52 @@ Service Hook  ──────► HTTP Trigger  ──────►       (F
                         Queue                  (Processor)
                            │                        │
                            ▼                        ▼
-                      Dead Letter            PR Comments
-                       Handler               (ADO REST API)
+                      Dead Letter           4-Agent Pipeline
+                       Handler              ────────────────
+                                            │ 1. Context    │
+                                            │ 2. Diff       │
+                                            │ 3. Review     │
+                                            │ 4. Overview   │
+                                            └───────┬───────┘
+                                                    ▼
+                                             PR Comments +
+                                             Risk Summary
+                                            (ADO REST API)
 ```
 
 ## Features
 
-- **Automated PR Reviews**: Automatically reviews code changes when PRs are created or updated
+- **Multi-Agent AI Pipeline**: Four specialized agents work together for comprehensive analysis
+  - **Context Agent**: Gathers codebase context, identifies patterns and related files
+  - **Diff Analyzer**: Categorizes changes and identifies areas of concern
+  - **Code Review Agent**: Performs detailed review with severity-scored comments
+  - **Overview Agent**: Synthesizes findings into executive summary with risk assessment
+- **PR Overview & Risk Assessment**: Executive summary with confidence scoring (1-5) and risk levels (safe → critical-risk)
+- **Principles-Based Review**: Configurable architectural, cloud, and security principles enforcement
 - **Multi-Language Support**: C#, TypeScript, JavaScript, Python, Java, Go, Rust, and more
 - **Smart Filtering**: Skips binary files, lock files, and generated code
 - **Duplicate Detection**: Avoids posting redundant comments
 - **Large PR Handling**: Intelligent chunking for PRs with many changes
 - **Dead Letter Handling**: Graceful handling of processing failures
 - **Infrastructure as Code**: Full Bicep templates for Azure deployment
+
+## Review Output
+
+Each PR review generates:
+
+### Line-Level Comments
+Individual code review comments posted directly on the relevant lines with:
+- **Severity**: Info (1) → Blocker (5)
+- **Category**: Bug, Security, Performance, Architecture, CloudCompliance, Style, etc.
+- **Actionable feedback** with suggested fixes
+
+### PR Overview (Summary Comment)
+An executive summary posted as a PR comment containing:
+- **Summary**: 2-4 sentence overview of the PR and findings
+- **Key Changes**: What changed and why it matters
+- **Important Files**: Files ranked by impact score (1-5)
+- **Risk Assessment**: `safe` | `low-risk` | `medium-risk` | `high-risk` | `critical-risk`
+- **Confidence Score**: 1-5 rating of review completeness
 
 ## Quick Start
 
@@ -90,18 +123,29 @@ See [Configuration Guide](docs/CONFIGURATION.md) for full details.
 ## Project Structure
 
 ```
-├── src/
-│   └── DevOpsCodeReviewer.Functions/
-│       ├── Configuration/     # Strongly-typed settings
-│       ├── Functions/         # Azure Function triggers
-│       ├── Models/            # Data transfer objects
-│       └── Services/          # Business logic
-├── tests/
-│   └── DevOpsCodeReviewer.Tests/
-├── infra/                     # Bicep IaC templates
-├── prompts/                   # LLM review prompts
-├── docs/                      # Documentation
-└── scripts/                   # Setup automation
+├── DevOpsCodeReviewer/
+│   ├── src/
+│   │   ├── DevOpsCodeReviewer.Core/           # Domain logic (no external dependencies)
+│   │   │   ├── Agents/                        # Agent interfaces
+│   │   │   ├── Models/                        # Domain models
+│   │   │   ├── Services/                      # Core business logic
+│   │   │   └── Workflows/                     # Workflow interfaces
+│   │   ├── DevOpsCodeReviewer.Infrastructure/ # External integrations
+│   │   │   ├── AI/                            # Azure OpenAI integration
+│   │   │   │   ├── Agents/                    # Agent implementations
+│   │   │   │   └── Models/                    # LLM response models
+│   │   │   ├── AzureDevOps/                   # Azure DevOps API client
+│   │   │   ├── Output/                        # PR comment posting
+│   │   │   └── Workflows/                     # Pipeline orchestration
+│   │   └── DevOpsCodeReviewer.Functions/      # Azure Functions host
+│   │       ├── Configuration/                 # Strongly-typed settings
+│   │       └── Functions/                     # Function triggers
+│   ├── prompts/                               # LLM review prompts
+│   │   └── principles/                        # Architectural/security principles
+│   └── tests/
+├── infra/                                     # Bicep IaC templates
+├── docs/                                      # Documentation
+└── scripts/                                   # Setup automation
 ```
 
 ## Development

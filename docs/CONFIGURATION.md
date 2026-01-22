@@ -10,6 +10,16 @@ Configuration is loaded from (in order of precedence):
 2. `local.settings.json` (local development only)
 3. Azure Function App Settings (production)
 
+## Quick Reference
+
+| Section | Key Settings |
+|---------|--------------|
+| Azure DevOps | Organization URL, PAT, file filtering |
+| LLM | Azure OpenAI endpoint, model, token limits |
+| Service Bus | Connection string, queue name |
+| Key Vault | Vault URL for secrets |
+| Webhook | Authentication secret |
+
 ## Azure DevOps Settings
 
 | Setting | Description | Default | Required |
@@ -64,6 +74,19 @@ package-lock.json, yarn.lock, pnpm-lock.yaml,
 | 3 | Major | Fix before merge |
 | 4 | Critical | Must fix before merge |
 | 5 | Blocker | Cannot merge |
+
+### Review Categories
+
+Comments are tagged with categories based on what triggered them:
+
+| Category | Source | Description |
+|----------|--------|-------------|
+| Bug | Language prompts | Potential bugs and logic errors |
+| Security | Security principles | Security vulnerabilities |
+| Performance | Language prompts | Performance issues |
+| Architecture | Architectural principles | Design and structure issues |
+| CloudCompliance | Cloud principles | Cloud-readiness issues |
+| Style | Language prompts | Code style and conventions |
 
 ## Service Bus Settings
 
@@ -165,3 +188,44 @@ All settings can be configured via environment variables using the double-unders
 export AzureDevOps__OrganizationUrl="https://dev.azure.com/myorg"
 export Llm__DeploymentName="gpt-4o"
 ```
+
+## Risk Assessment Output
+
+The Overview Agent produces a risk assessment for each PR. The risk level is derived from review comments:
+
+| Risk Level | Condition |
+|------------|-----------|
+| `safe` | No comments generated |
+| `low-risk` | Only Info or Minor comments |
+| `medium-risk` | Any Critical or Major comments |
+| `high-risk` | 2+ Critical comments |
+| `critical-risk` | Any Blocker comments |
+
+The Overview also includes:
+- **Confidence Score** (1-5): How confident the AI is in its review
+- **Important Files**: Files ranked by impact score (1-5)
+- **Key Changes**: Summary of what changed and why it matters
+
+## Prompt Configuration
+
+Prompts are loaded from the `prompts/` directory:
+
+| File | Purpose |
+|------|---------|
+| `generic-code-review.md` | Default prompt for all languages |
+| `csharp-code-review.md` | C#/.NET specific patterns |
+| `typescript-code-review.md` | TypeScript/JavaScript/React patterns |
+| `overview-generation.md` | Overview Agent instructions |
+| `principles/architectural-principles.md` | Architecture rules |
+| `principles/cloud-principles.md` | Cloud compliance rules |
+| `principles/security-principles.md` | Security rules |
+
+### Language Prompt Selection
+
+The system automatically selects prompts based on file extension:
+
+| Extensions | Prompt Used |
+|------------|-------------|
+| `.cs` | `csharp-code-review.md` |
+| `.ts`, `.tsx`, `.js`, `.jsx` | `typescript-code-review.md` |
+| All others | `generic-code-review.md` |
