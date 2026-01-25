@@ -84,7 +84,7 @@ public class PromptService : IPromptService
         // Load language-specific prompt if available
         if (ExtensionToPromptFile.TryGetValue(dominantExtension, out var promptFile))
         {
-            var languagePrompt = LoadPromptFile(promptFile);
+            var languagePrompt = LoadPromptFile($"languages/{promptFile}");
             if (!string.IsNullOrEmpty(languagePrompt))
             {
                 promptBuilder.AppendLine();

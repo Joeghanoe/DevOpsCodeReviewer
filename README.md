@@ -74,7 +74,7 @@ An executive summary posted as a PR comment containing:
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/your-org/azdo-code-reviewer.git
+git clone https://github.com/Joeghanoe/DevOpsCodeReviewer.git
 cd azdo-code-reviewer
 
 # Copy example settings

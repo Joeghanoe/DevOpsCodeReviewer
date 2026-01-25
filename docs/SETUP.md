@@ -16,8 +16,8 @@ Before you begin, ensure you have:
 ## Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/azdo-code-reviewer.git
-cd azdo-code-reviewer
+git clone https://github.com/Joeghanoe/DevOpsCodeReviewer.git
+cd DevOpsCodeReviewer
 ```
 
 ## Step 2: Create Azure OpenAI Resource
@@ -127,8 +127,8 @@ Or use GitHub Actions by pushing to main branch.
    - Repository: (select your repo or "Any")
    - Target branch: (optional filter)
 6. Configure action:
-   - URL: `https://func-xxx.azurewebsites.net/api/webhook?secret=YOUR_WEBHOOK_SECRET`
-   - (Get the webhook secret from the Function App configuration or generate a new one)
+   - URL: `https://func-xxx.azurewebsites.net/api/webhook?code=YOUR_FUNCTION_KEY`
+   - (Get the function key from Azure Portal → Function App → Functions → WebhookHandler → Function Keys)
 7. Click **Test** to verify the connection
 8. Click **Finish**
 

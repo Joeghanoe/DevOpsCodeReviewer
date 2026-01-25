@@ -36,10 +36,6 @@ param llmEndpoint string
 @description('LLM deployment name')
 param llmDeploymentName string = 'gpt-4o'
 
-@description('Webhook secret')
-@secure()
-param webhookSecret string = ''
-
 @description('App Service Plan SKU')
 @allowed([
   'Y1'      // Consumption
@@ -147,10 +143,6 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'Llm__ApiKeySecretName'
           value: 'foundry-api-key'
-        }
-        {
-          name: 'Webhook__Secret'
-          value: webhookSecret
         }
       ]
     }
