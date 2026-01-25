@@ -12,12 +12,12 @@ namespace DevOpsCodeReviewer.Functions.Functions;
 
 /// <summary>
 /// HTTP trigger function for Azure DevOps webhooks.
+/// Authentication is handled by Azure Functions host using function keys.
 /// </summary>
 public class WebhookHandler
 {
     private readonly ServiceBusClient _serviceBusClient;
     private readonly ServiceBusOptions _serviceBusOptions;
-    private readonly WebhookOptions _webhookOptions;
     private readonly AzureDevOpsOptions _adoOptions;
     private readonly ILogger<WebhookHandler> _logger;
 
@@ -29,12 +29,10 @@ public class WebhookHandler
 
     public WebhookHandler(
         IOptions<ServiceBusOptions> serviceBusOptions,
-        IOptions<WebhookOptions> webhookOptions,
         IOptions<AzureDevOpsOptions> adoOptions,
         ILogger<WebhookHandler> logger)
     {
         _serviceBusOptions = serviceBusOptions.Value;
-        _webhookOptions = webhookOptions.Value;
         _adoOptions = adoOptions.Value;
         _logger = logger;
 
@@ -43,7 +41,7 @@ public class WebhookHandler
 
     [Function("WebhookHandler")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "webhook")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "webhook")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         var correlationId = Guid.NewGuid().ToString();
@@ -53,13 +51,6 @@ public class WebhookHandler
         });
 
         _logger.LogInformation("Received webhook request");
-
-        // Validate webhook secret
-        if (!ValidateSecret(req))
-        {
-            _logger.LogWarning("Invalid or missing webhook secret");
-            return new UnauthorizedResult();
-        }
 
         // Parse the payload
         PullRequestPayload? payload;
@@ -149,49 +140,6 @@ public class WebhookHandler
             _logger.LogError(ex, "Failed to queue review request");
             return new StatusCodeResult(StatusCodes.Status503ServiceUnavailable);
         }
-    }
-
-    private bool ValidateSecret(HttpRequest req)
-    {
-        // Check query parameter
-        if (req.Query.TryGetValue("secret", out var querySecret))
-        {
-            return querySecret == _webhookOptions.Secret;
-        }
-
-        // Check Basic Auth header
-        if (req.Headers.TryGetValue("Authorization", out var authHeader))
-        {
-            var authValue = authHeader.ToString();
-            if (authValue.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    var encodedCredentials = authValue["Basic ".Length..];
-                    var credentials = System.Text.Encoding.UTF8.GetString(
-                        Convert.FromBase64String(encodedCredentials));
-                    var parts = credentials.Split(':', 2);
-
-                    if (parts.Length == 2 && parts[1] == _webhookOptions.Secret)
-                    {
-                        return true;
-                    }
-                }
-                catch
-                {
-                    // Invalid base64
-                }
-            }
-        }
-
-        // If no secret is configured, allow all requests (for testing)
-        if (string.IsNullOrEmpty(_webhookOptions.Secret))
-        {
-            _logger.LogWarning("No webhook secret configured - accepting all requests");
-            return true;
-        }
-
-        return false;
     }
 
     private string ExtractOrganizationUrl(PullRequestPayload payload)

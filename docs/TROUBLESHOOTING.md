@@ -76,9 +76,9 @@ traces
 **Symptoms**: Azure DevOps shows 401 error for webhook.
 
 **Solution**:
-1. Verify webhook secret in query parameter matches `Webhook__Secret`
-2. Check Basic Auth credentials if using that method
-3. Regenerate and update secret in both places
+1. Verify the function key is included in the webhook URL: `?code=YOUR_FUNCTION_KEY`
+2. Get the correct key from Azure Portal → Function App → Functions → WebhookHandler → Function Keys
+3. Regenerate and update the key if needed
 
 ### Webhook Returns 500 Error
 

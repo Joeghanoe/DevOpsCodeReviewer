@@ -15,14 +15,3 @@ public class ServiceBusOptions
     /// </summary>
     public string QueueName { get; set; } = "codereview-requests";
 }
-
-/// <summary>
-/// Configuration options for webhook handling.
-/// </summary>
-public class WebhookOptions
-{
-    /// <summary>
-    /// Secret for webhook validation.
-    /// </summary>
-    public string Secret { get; set; } = string.Empty;
-}

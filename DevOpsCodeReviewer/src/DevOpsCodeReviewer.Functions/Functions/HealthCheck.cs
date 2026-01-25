@@ -33,7 +33,7 @@ public class HealthCheck
 
     [Function("HealthCheck")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "health")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         var checks = new Dictionary<string, HealthCheckResult>();
@@ -64,7 +64,7 @@ public class HealthCheck
 
     [Function("HealthCheckLive")]
     public IActionResult RunLive(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health/live")] HttpRequest req)
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "health/live")] HttpRequest req)
     {
         // Simple liveness probe - just return 200 if the function is running
         return new OkObjectResult(new { status = "Alive", timestamp = DateTime.UtcNow });
@@ -72,7 +72,7 @@ public class HealthCheck
 
     [Function("HealthCheckReady")]
     public async Task<IActionResult> RunReady(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health/ready")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Function, "get", Route = "health/ready")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         // Readiness probe - check if dependencies are available

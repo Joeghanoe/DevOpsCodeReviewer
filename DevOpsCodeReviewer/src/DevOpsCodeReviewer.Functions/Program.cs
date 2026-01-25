@@ -31,7 +31,6 @@ var host = new HostBuilder()
         services.Configure<AzureDevOpsOptions>(configuration.GetSection("AzureDevOps"));
         services.Configure<LlmOptions>(configuration.GetSection("Llm"));
         services.Configure<ServiceBusOptions>(configuration.GetSection("ServiceBus"));
-        services.Configure<WebhookOptions>(configuration.GetSection("Webhook"));
 
         // Map AzureDevOpsOptions to CodeAnalysisOptions for Core services
         services.Configure<CodeAnalysisOptions>(opt =>

@@ -7,15 +7,15 @@ This directory contains prompt templates used by the AI code reviewer to analyze
 | File | Description |
 |------|-------------|
 | `generic-code-review.md` | General code review prompt applicable to all languages |
-| `csharp-code-review.md` | C# and .NET specific patterns and anti-patterns |
-| `typescript-code-review.md` | TypeScript/JavaScript and React specific patterns |
+| `languages/csharp-code-review.md` | C# and .NET specific patterns and anti-patterns |
+| `languages/typescript-code-review.md` | TypeScript/JavaScript and React specific patterns |
 
 ## How Prompts Work
 
 The code reviewer selects prompts based on the file extensions in the PR:
 
-- `.cs` files → Uses `csharp-code-review.md`
-- `.ts`, `.tsx`, `.js`, `.jsx` files → Uses `typescript-code-review.md`
+- `.cs` files → Uses `languages/csharp-code-review.md`
+- `.ts`, `.tsx`, `.js`, `.jsx` files → Uses `languages/typescript-code-review.md`
 - Other files → Uses `generic-code-review.md`
 
 ## Customizing Prompts

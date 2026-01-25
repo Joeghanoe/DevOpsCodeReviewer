@@ -74,18 +74,7 @@ Processes queued review requests and orchestrates the multi-agent AI pipeline.
 - Max 3 delivery attempts before dead-lettering
 - Chunks files to stay within LLM context limits
 
-### 3. Dead Letter Handler
-
-**File**: `Functions/DeadLetterHandler.cs`
-
-Handles messages that failed processing after max retries.
-
-**Responsibilities**:
-- Log failure details
-- Clean up dead letter queue
-- (Future) Send alerts or store for manual review
-
-### 4. Health Check
+### 3. Health Check
 
 **File**: `Functions/HealthCheck.cs`
 

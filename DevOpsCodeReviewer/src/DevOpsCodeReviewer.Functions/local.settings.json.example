@@ -18,8 +18,6 @@
     "Llm__MaxFilesPerRequest": "10",
     "Llm__MaxLinesPerRequest": "2000",
 
-    "KeyVault__VaultUrl": "https://your-keyvault.vault.azure.net/",
-
-    "Webhook__Secret": "<your-webhook-secret>"
+    "KeyVault__VaultUrl": "https://your-keyvault.vault.azure.net/"
   }
 }

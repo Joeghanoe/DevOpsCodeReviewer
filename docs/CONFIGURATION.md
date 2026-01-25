@@ -18,14 +18,12 @@ Configuration is loaded from (in order of precedence):
 | LLM | Azure OpenAI endpoint, model, token limits |
 | Service Bus | Connection string, queue name |
 | Key Vault | Vault URL for secrets |
-| Webhook | Authentication secret |
 
 ## Azure DevOps Settings
 
 | Setting | Description | Default | Required |
 |---------|-------------|---------|----------|
 | `AzureDevOps__OrganizationUrl` | Your Azure DevOps organization URL | - | Yes |
-| `AzureDevOps__Pat` | PAT token (local dev only) | - | No |
 | `AzureDevOps__PatSecretName` | Key Vault secret name for PAT | `ado-pat-token` | No |
 | `AzureDevOps__ApiVersion` | Azure DevOps REST API version | `7.1` | No |
 | `AzureDevOps__TimeoutSeconds` | API request timeout | `30` | No |
@@ -101,11 +99,18 @@ Comments are tagged with categories based on what triggered them:
 |---------|-------------|---------|----------|
 | `KeyVault__VaultUrl` | Key Vault URL | - | Yes (prod) |
 
-## Webhook Settings
+## Webhook Authentication
 
-| Setting | Description | Default | Required |
-|---------|-------------|---------|----------|
-| `Webhook__Secret` | Webhook authentication secret | - | Recommended |
+The webhook endpoint uses Azure Functions host keys for authentication. When configuring the webhook in Azure DevOps, append the function key to the URL:
+
+```
+https://your-function.azurewebsites.net/api/webhook?code=YOUR_FUNCTION_KEY
+```
+
+To get the function key:
+1. Azure Portal → Your Function App → Functions → WebhookHandler
+2. Click **Function Keys**
+3. Copy the `default` key or create a new one
 
 ## Example Configuration
 
@@ -122,12 +127,12 @@ Comments are tagged with categories based on what triggered them:
     "ServiceBus__QueueName": "codereview-requests",
 
     "AzureDevOps__OrganizationUrl": "https://dev.azure.com/myorg",
-    "AzureDevOps__Pat": "your-pat-here",
+    "AzureDevOps__PatSecretName": "ado-pat-token",
 
     "Llm__Endpoint": "https://myopenai.openai.azure.com/",
     "Llm__DeploymentName": "gpt-4o",
 
-    "Webhook__Secret": "my-secret-123"
+    "KeyVault__VaultUrl": "https://your-keyvault.vault.azure.net/"
   }
 }
 ```
@@ -213,9 +218,9 @@ Prompts are loaded from the `prompts/` directory:
 | File | Purpose |
 |------|---------|
 | `generic-code-review.md` | Default prompt for all languages |
-| `csharp-code-review.md` | C#/.NET specific patterns |
-| `typescript-code-review.md` | TypeScript/JavaScript/React patterns |
 | `overview-generation.md` | Overview Agent instructions |
+| `languages/csharp-code-review.md` | C#/.NET specific patterns |
+| `languages/typescript-code-review.md` | TypeScript/JavaScript/React patterns |
 | `principles/architectural-principles.md` | Architecture rules |
 | `principles/cloud-principles.md` | Cloud compliance rules |
 | `principles/security-principles.md` | Security rules |
@@ -226,6 +231,6 @@ The system automatically selects prompts based on file extension:
 
 | Extensions | Prompt Used |
 |------------|-------------|
-| `.cs` | `csharp-code-review.md` |
-| `.ts`, `.tsx`, `.js`, `.jsx` | `typescript-code-review.md` |
+| `.cs` | `languages/csharp-code-review.md` |
+| `.ts`, `.tsx`, `.js`, `.jsx` | `languages/typescript-code-review.md` |
 | All others | `generic-code-review.md` |

@@ -16,8 +16,8 @@ Before you begin, ensure you have:
 ## Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/azdo-code-reviewer.git
-cd azdo-code-reviewer
+git clone https://github.com/Joeghanoe/DevOpsCodeReviewer.git
+cd DevOpsCodeReviewer
 ```
 
 ## Step 2: Create Azure OpenAI Resource
