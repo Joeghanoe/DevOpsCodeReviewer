@@ -28,7 +28,7 @@ The code reviewer selects prompts based on the file extensions in the PR:
    - Common anti-patterns with examples
    - Good patterns to recognize
    - Output format specification
-3. Update `LlmService.cs` to use the new prompt for relevant file extensions
+3. Update `PromptService.cs` to use the new prompt for relevant file extensions
 
 ### Modifying Existing Prompts
 
@@ -100,6 +100,6 @@ Keep prompts concise to leave room for code:
 
 - System prompt: ~1,000-2,000 tokens recommended
 - User prompt (code): Up to 100,000 tokens with gpt-4o
-- Response: Limited by `MaxTokens` setting (default: 4,096)
+- Code per request: Limited by `MaxLinesPerRequest` setting (default: 2,000 lines)
 
 Large prompts reduce the amount of code that can be reviewed in a single request.

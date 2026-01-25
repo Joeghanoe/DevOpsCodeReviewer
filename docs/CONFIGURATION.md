@@ -52,16 +52,12 @@ package-lock.json, yarn.lock, pnpm-lock.yaml,
 |---------|-------------|---------|----------|
 | `Llm__Endpoint` | Azure OpenAI endpoint URL | - | Yes |
 | `Llm__DeploymentName` | Model deployment name | `gpt-4o` | No |
+| `Llm__ApiKey` | API key (local dev only) | - | No |
 | `Llm__ApiKeySecretName` | Key Vault secret name | `foundry-api-key` | No |
-| `Llm__MaxTokens` | Max response tokens | `4096` | No |
-| `Llm__Temperature` | Response temperature (0-1) | `0.3` | No |
 | `Llm__MaxFilesPerRequest` | Files per LLM request | `10` | No |
 | `Llm__MaxLinesPerRequest` | Lines per LLM request | `2000` | No |
-| `Llm__MaxRetries` | API retry attempts | `3` | No |
-| `Llm__RetryDelayMs` | Initial retry delay | `1000` | No |
-| `Llm__TimeoutSeconds` | Request timeout | `120` | No |
+| `Llm__PromptsDirectory` | Directory containing prompts | `prompts` | No |
 | `Llm__MinSeverityLevel` | Minimum severity to report | `2` | No |
-| `Llm__UseStructuredOutput` | Use JSON mode | `true` | No |
 
 ### Severity Levels
 
@@ -162,7 +158,7 @@ If your PRs often have many files:
 ```
 Llm__MaxFilesPerRequest=15
 Llm__MaxLinesPerRequest=3000
-Llm__MaxTokens=8192
+AzureDevOps__MaxFilesPerReview=75
 ```
 
 ### For Faster Reviews
@@ -170,7 +166,6 @@ Llm__MaxTokens=8192
 If speed is more important than thoroughness:
 
 ```
-Llm__Temperature=0.1
 Llm__MinSeverityLevel=3
 AzureDevOps__MaxFilesPerReview=30
 ```
@@ -180,9 +175,9 @@ AzureDevOps__MaxFilesPerReview=30
 If you want more detailed feedback:
 
 ```
-Llm__Temperature=0.5
 Llm__MinSeverityLevel=1
-Llm__MaxTokens=8192
+Llm__MaxFilesPerRequest=5
+Llm__MaxLinesPerRequest=1500
 ```
 
 ## Environment Variables
