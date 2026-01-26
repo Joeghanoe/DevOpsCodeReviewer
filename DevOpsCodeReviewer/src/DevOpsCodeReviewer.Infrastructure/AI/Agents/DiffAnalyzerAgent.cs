@@ -2,10 +2,9 @@ using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
 using DevOpsCodeReviewer.Infrastructure.AI.Models;
-using DevOpsCodeReviewer.Infrastructure.Configuration;
+using DevOpsCodeReviewer.Infrastructure.AI.Validation;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using System.Diagnostics;
 using System.Text;
@@ -201,23 +200,37 @@ Analyze these changes and identify:
 
 Provide severity levels (Low, Medium, High) for concerns and review depth (Surface, Standard, Deep) for focus areas.";
 
-            var response = await _agent.RunAsync([new UserChatMessage(userMessage)]);
-
-            // Extract text from response and deserialize
-            var responseText = response.AsChatResponse().Text;
-            var parsed = JsonSerializer.Deserialize<DiffAnalysisResponse>(responseText, JsonSerializerOptions.Web);
+            var parsed = await LlmRetryHandler.ExecuteWithRetryAsync<DiffAnalysisResponse>(
+                _agent,
+                userMessage,
+                ValidateDiffAnalysisResponse,
+                _logger,
+                cancellationToken);
 
             if (parsed != null)
             {
-                // Map DiffAnalysisResponse to internal types
+                // Map DiffAnalysisResponse to internal types, skipping invalid entries
                 if (parsed.Concerns != null)
                 {
                     foreach (var c in parsed.Concerns)
                     {
+                        // Skip concerns missing required fields
+                        if (string.IsNullOrWhiteSpace(c.Area))
+                        {
+                            _logger.LogDebug("Skipping concern with missing Area");
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(c.Reason))
+                        {
+                            _logger.LogDebug("Skipping concern with missing Reason for {Area}", c.Area);
+                            continue;
+                        }
+
                         concerns.Add(new AreaOfConcern
                         {
-                            FilePath = c.Area ?? "",
-                            Description = c.Reason ?? "",
+                            FilePath = c.Area,
+                            Description = c.Reason,
                             Severity = ParseSeverity(c.Severity),
                             Type = ConcernType.Other
                         });
@@ -228,9 +241,16 @@ Provide severity levels (Low, Medium, High) for concerns and review depth (Surfa
                 {
                     foreach (var f in parsed.FocusAreas)
                     {
+                        // Skip focus areas missing required fields
+                        if (string.IsNullOrWhiteSpace(f.Area))
+                        {
+                            _logger.LogDebug("Skipping focus area with missing Area");
+                            continue;
+                        }
+
                         focusAreas.Add(new ReviewFocus
                         {
-                            Title = f.Area ?? "",
+                            Title = f.Area,
                             Description = $"{f.Reason ?? ""} (Review Depth: {f.SuggestedReviewDepth ?? "Standard"})"
                         });
                     }
@@ -334,5 +354,48 @@ Provide severity levels (Low, Medium, High) for concerns and review depth (Surfa
             "high" => ConcernSeverity.High,
             _ => ConcernSeverity.Medium
         };
+    }
+
+    /// <summary>
+    /// Validates the LLM response structure for diff analysis.
+    /// Returns (isValid, errors) for the retry handler.
+    /// </summary>
+    private static (bool isValid, List<string> errors) ValidateDiffAnalysisResponse(
+        string json,
+        DiffAnalysisResponse? response)
+    {
+        var errors = new List<string>();
+
+        if (response == null)
+        {
+            errors.Add("Response deserialized to null");
+            return (false, errors);
+        }
+
+        // A response with no concerns/focus areas is valid (no issues found)
+        // We just need to ensure the structure is correct
+
+        if (response.Concerns != null)
+        {
+            var validConcerns = response.Concerns.Count(c =>
+                !string.IsNullOrWhiteSpace(c.Area) && !string.IsNullOrWhiteSpace(c.Reason));
+
+            if (response.Concerns.Count > 0 && validConcerns == 0)
+            {
+                errors.Add("All concerns are missing required fields (Area or Reason)");
+            }
+        }
+
+        if (response.FocusAreas != null)
+        {
+            var validFocusAreas = response.FocusAreas.Count(f => !string.IsNullOrWhiteSpace(f.Area));
+
+            if (response.FocusAreas.Count > 0 && validFocusAreas == 0)
+            {
+                errors.Add("All focus areas are missing required 'Area' field");
+            }
+        }
+
+        return (errors.Count == 0, errors);
     }
 }

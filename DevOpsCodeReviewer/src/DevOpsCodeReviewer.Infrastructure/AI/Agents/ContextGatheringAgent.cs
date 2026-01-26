@@ -2,11 +2,10 @@ using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
 using DevOpsCodeReviewer.Infrastructure.AI.Models;
+using DevOpsCodeReviewer.Infrastructure.AI.Validation;
 using DevOpsCodeReviewer.Infrastructure.AzureDevOps;
-using DevOpsCodeReviewer.Infrastructure.Configuration;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using System.Diagnostics;
 using System.Text;
@@ -247,23 +246,37 @@ public class ContextGatheringAgent(
         {
             var userMessage = contextBuilder.ToString() + "\n\nIdentify patterns and architectural insights in these files.";
 
-            var response = await _agent.RunAsync([new UserChatMessage(userMessage)]);
-
-            // Extract text from response and deserialize
-            var responseText = response.AsChatResponse().Text;
-            var parsed = JsonSerializer.Deserialize<PatternAnalysisResponse>(responseText, JsonSerializerOptions.Web);
+            var parsed = await LlmRetryHandler.ExecuteWithRetryAsync<PatternAnalysisResponse>(
+                _agent,
+                userMessage,
+                ValidatePatternAnalysisResponse,
+                _logger,
+                cancellationToken);
 
             if (parsed != null)
             {
-                // Map response to internal types
+                // Map response to internal types, skipping invalid entries
                 if (parsed.Patterns != null)
                 {
                     foreach (var p in parsed.Patterns)
                     {
+                        // Skip patterns missing required fields
+                        if (string.IsNullOrWhiteSpace(p.Name))
+                        {
+                            _logger.LogDebug("Skipping pattern with missing Name");
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(p.Description))
+                        {
+                            _logger.LogDebug("Skipping pattern with missing Description for {Name}", p.Name);
+                            continue;
+                        }
+
                         patterns.Add(new CodePattern
                         {
-                            Name = p.Name ?? "",
-                            Description = p.Description ?? "",
+                            Name = p.Name,
+                            Description = p.Description,
                             Category = ParsePatternCategory(p.Category),
                             ImplementingFiles = p.ImplementingFiles ?? [],
                             ExampleCode = p.ExampleCode ?? ""
@@ -275,9 +288,16 @@ public class ContextGatheringAgent(
                 {
                     foreach (var i in parsed.Insights)
                     {
+                        // Skip insights missing required fields
+                        if (string.IsNullOrWhiteSpace(i.Title))
+                        {
+                            _logger.LogDebug("Skipping insight with missing Title");
+                            continue;
+                        }
+
                         insights.Add(new ArchitectureInsight
                         {
-                            Title = i.Title ?? "",
+                            Title = i.Title,
                             Description = $"{i.Description ?? ""} Impact: {i.Impact ?? "Unknown"}"
                         });
                     }
@@ -360,5 +380,48 @@ public class ContextGatheringAgent(
             "testing" or "test" => PatternCategory.Testing,
             _ => PatternCategory.Other
         };
+    }
+
+    /// <summary>
+    /// Validates the LLM response structure for pattern analysis.
+    /// Returns (isValid, errors) for the retry handler.
+    /// </summary>
+    private static (bool isValid, List<string> errors) ValidatePatternAnalysisResponse(
+        string json,
+        PatternAnalysisResponse? response)
+    {
+        var errors = new List<string>();
+
+        if (response == null)
+        {
+            errors.Add("Response deserialized to null");
+            return (false, errors);
+        }
+
+        // A response with no patterns/insights is valid (none found)
+        // We just need to ensure the structure is correct
+
+        if (response.Patterns != null)
+        {
+            var validPatterns = response.Patterns.Count(p =>
+                !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Description));
+
+            if (response.Patterns.Count > 0 && validPatterns == 0)
+            {
+                errors.Add("All patterns are missing required fields (Name or Description)");
+            }
+        }
+
+        if (response.Insights != null)
+        {
+            var validInsights = response.Insights.Count(i => !string.IsNullOrWhiteSpace(i.Title));
+
+            if (response.Insights.Count > 0 && validInsights == 0)
+            {
+                errors.Add("All insights are missing required 'Title' field");
+            }
+        }
+
+        return (errors.Count == 0, errors);
     }
 }

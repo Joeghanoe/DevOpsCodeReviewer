@@ -2,6 +2,7 @@ using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Core.Services;
 using DevOpsCodeReviewer.Infrastructure.AI.Models;
+using DevOpsCodeReviewer.Infrastructure.AI.Validation;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
@@ -211,24 +212,44 @@ public class CodeReviewAgent(
 
         try
         {
-            ChatCompletion agentResponse = await _agent.RunAsync([new UserChatMessage(contextBuilder.ToString())]);
-
-            // Extract text from response and deserialize
-            var responseText = agentResponse.AsChatResponse().Text;
-            var parsed = JsonSerializer.Deserialize<CodeReviewLlmResponse>(responseText, JsonSerializerOptions.Web);
+            var parsed = await LlmRetryHandler.ExecuteWithRetryAsync<CodeReviewLlmResponse>(
+                _agent,
+                contextBuilder.ToString(),
+                ValidateCodeReviewResponse,
+                _logger,
+                cancellationToken);
 
             if (parsed?.Comments != null)
             {
-                // Map response to internal types
+                // Map response to internal types, skipping invalid comments
                 foreach (var c in parsed.Comments)
                 {
+                    // Skip comments missing required fields
+                    if (string.IsNullOrWhiteSpace(c.FilePath))
+                    {
+                        _logger.LogDebug("Skipping comment with missing FilePath");
+                        continue;
+                    }
+
+                    if (c.LineNumber == null || c.LineNumber < 1)
+                    {
+                        _logger.LogDebug("Skipping comment with missing or invalid LineNumber for {FilePath}", c.FilePath);
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(c.Message))
+                    {
+                        _logger.LogDebug("Skipping comment with missing Message for {FilePath}:{LineNumber}", c.FilePath, c.LineNumber);
+                        continue;
+                    }
+
                     response.Comments.Add(new ReviewComment
                     {
-                        FilePath = c.FilePath ?? "",
-                        LineNumber = c.LineNumber ?? 0,
+                        FilePath = c.FilePath,
+                        LineNumber = c.LineNumber.Value,
                         Severity = ParseSeverity(c.Severity),
                         Category = ParseCategory(c.Category),
-                        Message = c.Message ?? "",
+                        Message = c.Message,
                         ImpactExample = c.ImpactExample,
                         Suggestion = c.Suggestion ?? "",
                         RelatedCodeReference = c.RelatedPattern
@@ -364,5 +385,65 @@ public class CodeReviewAgent(
             "cloudcompliance" or "cloud compliance" or "cloud_compliance" or "cloud" => ReviewCategory.CloudCompliance,
             _ => ReviewCategory.Other
         };
+    }
+
+    /// <summary>
+    /// Validates the LLM response structure for code review.
+    /// Returns (isValid, errors) for the retry handler.
+    /// </summary>
+    private static (bool isValid, List<string> errors) ValidateCodeReviewResponse(
+        string json,
+        CodeReviewLlmResponse? response)
+    {
+        var errors = new List<string>();
+
+        if (response == null)
+        {
+            errors.Add("Response deserialized to null");
+            return (false, errors);
+        }
+
+        if (response.Comments == null)
+        {
+            errors.Add("Missing 'comments' array in response");
+            return (false, errors);
+        }
+
+        // Check if at least some comments have valid structure
+        var validComments = 0;
+        var totalComments = response.Comments.Count;
+
+        foreach (var comment in response.Comments)
+        {
+            var commentErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(comment.FilePath))
+                commentErrors.Add("missing 'filePath'");
+            if (comment.LineNumber == null || comment.LineNumber < 1)
+                commentErrors.Add("missing or invalid 'lineNumber'");
+            if (string.IsNullOrWhiteSpace(comment.Message))
+                commentErrors.Add("missing 'message'");
+
+            if (commentErrors.Count == 0)
+            {
+                validComments++;
+            }
+        }
+
+        // If no comments at all, that's valid (no issues found)
+        if (totalComments == 0)
+        {
+            return (true, errors);
+        }
+
+        // If we have some valid comments, accept the response
+        if (validComments > 0)
+        {
+            return (true, errors);
+        }
+
+        // All comments are invalid
+        errors.Add($"All {totalComments} comments are missing required fields (filePath, lineNumber, or message)");
+        return (false, errors);
     }
 }

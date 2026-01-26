@@ -1,6 +1,7 @@
 using DevOpsCodeReviewer.Core.Agents;
 using DevOpsCodeReviewer.Core.Models;
 using DevOpsCodeReviewer.Infrastructure.AI.Models;
+using DevOpsCodeReviewer.Infrastructure.AI.Validation;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
@@ -34,11 +35,13 @@ public class OverviewAgent(
         try
         {
             var contextBuilder = BuildContext(input);
-            
-            ChatCompletion agentResponse = await agent.RunAsync([new UserChatMessage(contextBuilder)]);
 
-            var responseText = agentResponse.AsChatResponse().Text;
-            var parsed = JsonSerializer.Deserialize<OverviewLlmResponse>(responseText, JsonSerializerOptions.Web);
+            var parsed = await LlmRetryHandler.ExecuteWithRetryAsync<OverviewLlmResponse>(
+                agent,
+                contextBuilder,
+                ValidateOverviewResponse,
+                logger,
+                cancellationToken);
 
             var overview = MapAndValidateResponse(parsed, input);
 
@@ -294,7 +297,53 @@ public class OverviewAgent(
     {
         if (string.IsNullOrEmpty(message) || message.Length <= maxLength)
             return message;
-        
+
         return message[..(maxLength - 3)] + "...";
+    }
+
+    /// <summary>
+    /// Validates the LLM response structure for overview generation.
+    /// Returns (isValid, errors) for the retry handler.
+    /// </summary>
+    private static (bool isValid, List<string> errors) ValidateOverviewResponse(
+        string json,
+        OverviewLlmResponse? response)
+    {
+        var errors = new List<string>();
+
+        if (response == null)
+        {
+            errors.Add("Response deserialized to null");
+            return (false, errors);
+        }
+
+        // Summary is the most important field
+        if (string.IsNullOrWhiteSpace(response.Summary))
+        {
+            errors.Add("Missing required 'summary' field");
+        }
+
+        // RiskAssessment should be present
+        if (string.IsNullOrWhiteSpace(response.RiskAssessment))
+        {
+            errors.Add("Missing 'riskAssessment' field (expected: safe, low-risk, medium-risk, high-risk, or critical-risk)");
+        }
+        else if (!ValidRiskAssessments.Contains(response.RiskAssessment.ToLowerInvariant().Trim()))
+        {
+            // We normalize these, but if it's completely wrong, flag it
+            var normalizedCheck = response.RiskAssessment.ToLowerInvariant().Trim() switch
+            {
+                "low" or "low risk" or "medium" or "moderate" or "medium risk" or "moderate risk"
+                    or "high" or "high risk" or "critical" or "critical risk" => true,
+                _ => false
+            };
+
+            if (!normalizedCheck)
+            {
+                errors.Add($"Invalid 'riskAssessment' value: '{response.RiskAssessment}'. Expected: safe, low-risk, medium-risk, high-risk, or critical-risk");
+            }
+        }
+
+        return (errors.Count == 0, errors);
     }
 }

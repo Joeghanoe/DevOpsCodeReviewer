@@ -1,6 +1,8 @@
 using Azure.Messaging.ServiceBus;
-using DevOpsCodeReviewer.Functions.Models;
+using DevOpsCodeReviewer.Core.Models;
+using DevOpsCodeReviewer.Infrastructure.AzureDevOps.Models;
 using DevOpsCodeReviewer.Infrastructure.Configuration;
+using DevOpsCodeReviewer.Infrastructure.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -68,10 +70,23 @@ public class WebhookHandler
             return new BadRequestObjectResult("Invalid JSON payload");
         }
 
+        // Validate the payload structure
+        var validationResult = WebhookPayloadValidator.Validate(payload);
+        if (!validationResult.IsValid)
+        {
+            _logger.LogWarning("Invalid webhook payload: {Errors}", validationResult.ErrorMessage);
+            return new BadRequestObjectResult(new
+            {
+                message = "Invalid payload",
+                errors = validationResult.Errors
+            });
+        }
+
+        // After validation passes, payload and its required fields are guaranteed non-null
+        // This assertion helps the compiler understand the null-safety
         if (payload == null)
         {
-            _logger.LogWarning("Empty webhook payload");
-            return new BadRequestObjectResult("Empty payload");
+            throw new InvalidOperationException("Validation passed but payload is null - this should never happen");
         }
 
         // Validate event type
