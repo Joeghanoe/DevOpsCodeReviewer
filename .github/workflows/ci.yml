@@ -4,15 +4,12 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - '*.sln'
+      - 'DevOpsCodeReviewer/**'
       - '.github/workflows/ci.yml'
   push:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'tests/**'
+      - 'DevOpsCodeReviewer/**'
       - '*.sln'
       - '.github/workflows/ci.yml'
 
