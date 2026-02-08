@@ -18,7 +18,7 @@
     <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.8.0" />
 
     <!-- Microsoft Agent Framework -->
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260121.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260205.1" />
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-preview.260108.1" />
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-preview.260121.1" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
